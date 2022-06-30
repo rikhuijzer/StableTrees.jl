@@ -37,7 +37,7 @@ function Base.:(==)(a::ST.SplitPoint, b::ST.SplitPoint)
 end
 
 function Base.:(==)(a::ST.Leaf, b::ST.Leaf)
-    return a.majority == b.majority && a.values == b.values
+    return a.majority == b.majority && a.n == b.n
 end
 
 let
@@ -45,13 +45,13 @@ let
     @test node.splitpoint == ST.SplitPoint(1, Float(3))
     let
         majority = 1
-        data = [1]
-        @test node.left == ST.Leaf{Int}(majority, data)
+        l = 1
+        @test node.left == ST.Leaf(majority, l)
     end
     let
         majority = 2
-        data = [2]
-        @test node.right == ST.Leaf{Int}(majority, data)
+        l = 1
+        @test node.right == ST.Leaf(majority, l)
     end
 end
 
@@ -66,10 +66,12 @@ let
     # See "An introduction to Statistical Learning" for details.
     # So decision trees are not optimized to be well balanced.
     @test node.splitpoint == ST.SplitPoint(1, Float(7))
-    @test node.right.values == [4]
+    @test node.right.majority == 4
+    @test node.right.n == 1
     @test node.left.splitpoint == ST.SplitPoint(1, Float(5))
-    # All datapoints are [3] here, 4 was already part of an earlier leaf.
-    @test node.left.right.values == [3]
+    # All datapoints are 3 here, 4 was already part of an earlier leaf.
+    @test node.left.right.majority == 3
+    @test node.left.right.n == 1
 
     @test ST._predict(node, [7, 2]) == 4
     @test ST._predict(node, [5, 2]) == 3

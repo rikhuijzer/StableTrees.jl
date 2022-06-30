@@ -1,4 +1,4 @@
-module Interface
+module MLJImplementation
 
 import MLJModelInterface: fit, metadata_model, metadata_pkg
 

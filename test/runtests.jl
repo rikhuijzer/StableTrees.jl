@@ -13,5 +13,5 @@ Float = ST.Float
 end
 
 @testset "interface" begin
-    include("interface.jl")
+    include("mlj.jl")
 end

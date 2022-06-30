@@ -113,10 +113,15 @@ function _split(
     return SplitPoint(best_score_feature, best_score_cutpoint)
 end
 
-# These types are usually the same, but not for categorical arrays.
-struct Leaf{S, T}
+"""
+    Leaf{S}
+
+Leaf of a decision tree.
+In this leaf, `n` outcomes fall with a `majority`.
+"""
+struct Leaf{S}
     majority::S
-    values::AbstractVector{T}
+    n::Int
 end
 
 function _mode(y::AbstractVector)
@@ -140,7 +145,7 @@ end
 
 function Leaf(y)
     majority = _mode(y)
-    return Leaf{eltype(y)}(majority, y)
+    return Leaf(majority, length(y))
 end
 
 struct Node{T}
@@ -167,6 +172,14 @@ function _verify_lengths(X, y)
         error("Expected X and y to have the same number of rows, but got $l1 and $l2 rows")
     end
 end
+
+# _eltype(y::AbstractCategoricalArray) = typeof(unwrap(first(y)))
+# _eltype(y::AbstractArray{AbstractCategoricalArray}) = typeof(unwrap(first(y)))
+
+_y_type(x::CategoricalValue) = typeof(unwrap(x))
+_y_type(x) = typeof(x)
+# Using first because I couldn't find a type matching a view of an CategoricalArray.
+_y_eltype(y) = _y_type(first(y))
 
 function _tree(
         X,
@@ -195,7 +208,8 @@ function _tree(
         _X, _y = _view_X_y(X, y, splitpoint, ≥)
         _tree(_X, _y; cutpoints, classes, depth)
     end
-    node = Node{eltype(y)}(splitpoint, left, right)
+    T = _y_eltype(y)
+    node = Node{T}(splitpoint, left, right)
     return node
 end
 
@@ -254,7 +268,7 @@ function _forest(
     n_features = round(Int, sqrt(_p(X)))
     n_samples = floor(Int, partial_sampling * length(y))
 
-    T = eltype(X)
+    T = _y_eltype(y)
     trees = Vector{Union{Node{T},Leaf{T}}}(undef, n_trees)
     for i in 1:n_trees
         _rng = copy(rng)
