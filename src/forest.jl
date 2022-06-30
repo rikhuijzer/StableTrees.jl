@@ -117,7 +117,7 @@ end
     Leaf{S}
 
 Leaf of a decision tree.
-In this leaf, `n` outcomes fall with a `majority`.
+In this leaf, `n` outcomes fall within the region of this leaf and have a `majority`.
 """
 struct Leaf{S}
     majority::S
