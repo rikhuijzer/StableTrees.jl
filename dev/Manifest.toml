@@ -90,9 +90,9 @@ version = "0.10.6"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "ff38036fb7edc903de4e79f32067d8497508616b"
+git-tree-sha1 = "80ca332f6dcb2508adba68f22f551adb2d00a624"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.2"
+version = "1.15.3"
 
 [[deps.ChangesOfVariables]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -374,6 +374,12 @@ version = "1.0.0"
 git-tree-sha1 = "f5fc07d4e706b84f72d54eedcc1c13d92fb0871c"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.2"
+
+[[deps.InlineStrings]]
+deps = ["Parsers"]
+git-tree-sha1 = "d19f9edd8c34760dca2de2b503f969d8700ed288"
+uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
+version = "1.1.4"
 
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -905,7 +911,7 @@ uuid = "860ef19b-820b-49d6-a774-d7a799459cd3"
 version = "1.0.0"
 
 [[deps.StableTrees]]
-deps = ["AbstractTrees", "CategoricalArrays", "LinearAlgebra", "MLJModelInterface", "Random", "Statistics", "Tables"]
+deps = ["AbstractTrees", "CategoricalArrays", "InlineStrings", "LinearAlgebra", "MLJModelInterface", "Random", "Statistics", "Tables"]
 path = "/home/runner/work/StableTrees.jl/StableTrees.jl"
 uuid = "9113e207-2504-4b06-8eee-d78e288bee65"
 version = "1.0.0"
