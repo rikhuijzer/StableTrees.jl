@@ -154,7 +154,37 @@ To see how this works, let's look at the `nodes` feature on its own:
 
 # ╔═╡ 0d121fa3-fbfa-44e5-904b-64a1622ec91b
 md"""
+The default random forest algorithm is allowed to choose any location inside this feature to split on.
+To avoid having to figure out locations by itself, the algorithm will choose on of the datapoints as a split location.
+So, for example, the following split indicated by the red vertical line would be a valid choice:
+"""
 
+# ╔═╡ 896e00dc-2ce9-4a9f-acc1-519aec21dd83
+md"""
+But what happens if we take a random subset of the data?
+Say, we take the following subset of length `0.7 * length(nodes)`:
+"""
+
+# ╔═╡ ee12350a-627b-4a11-99cb-38c496977d18
+md"""
+Now, the algorithm would choose a different location and, hence, introduce unstability.
+To solve this, Bénard et al. decided to limit the splitpoints to a pre-defined set of points.
+For each feature, they find `q` empirical quantiles where `q` is typically 10.
+Let's overlay these quantiles on top of the `nodes` feature:
+"""
+
+# ╔═╡ a816caed-659c-4b07-b9b2-9a820d844416
+md"""
+The reason that these cutpoints lay much to the left is that there are many datapoints at the left.
+For most people, few auxillary `nodes` were detected.
+
+Next, let's see where the cutpoints are when we take the same random subset as above:
+"""
+
+# ╔═╡ 52b61a65-a2d0-4ef9-b3e3-e0eb825ca501
+md"""
+As can be seen, many cutpoints are at the same location as before.
+Furthermore, compared to the unrestricted range, the chance that two different trees who see a different random subset of the data will select the same cutpoint has increased dramatically.
 """
 
 # ╔═╡ aa560aad-9de4-4e7f-92ce-316f88439d57
@@ -294,7 +324,7 @@ let
 end
 
 # ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
-nodes = haberman.nodes
+nodes = sort(haberman.nodes);
 
 # ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # hideall
@@ -306,6 +336,59 @@ let
 	fig = Figure(; resolution=(800, 100))
 	ax = Axis(fig[1, 1])
 	scatter!(ax, nodes, fill(1, ln))
+	hideydecorations!(ax)
+	fig
+end
+
+# ╔═╡ 2c1adef4-822e-4dc0-946b-dc574e50b305
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	scatter!(ax, nodes, fill(1, ln))
+	vlines!(ax, [nodes[303]]; color=:red)
+	hideydecorations!(ax)
+	fig
+end
+
+# ╔═╡ bfcb5e17-8937-4448-b090-2782818c6b6c
+# hideall
+subset = collect(ST._rand_subset(_rng(), nodes, round(Int, 0.7 * ln)));
+
+# ╔═╡ dff9eb71-a853-4186-8245-a64206379b6f
+# hideall
+ls = length(subset);
+
+# ╔═╡ 25ad7a18-f989-40f7-8ef1-4ca506446478
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	scatter!(ax, subset, fill(1, ls))
+	hideydecorations!(ax)
+	fig
+end
+
+# ╔═╡ 8b57cda0-7249-440d-90b2-ff4ca27e6d6c
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	cutpoints = ST._cutpoints(subset, 10)
+	scatter!(ax, subset, fill(1, ls))
+	vlines!(ax, cutpoints; color=:red)
+	hideydecorations!(ax)
+	fig
+end
+
+# ╔═╡ 3d68d35b-2192-4640-895d-51ce8e29a368
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	cutpoints = ST._cutpoints(nodes, 10)
+	scatter!(ax, nodes, fill(1, ln))
+	vlines!(ax, cutpoints; color=:red)
 	hideydecorations!(ax)
 	fig
 end
@@ -331,6 +414,16 @@ end
 # ╠═cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # ╠═de90efc9-2171-4406-93a1-9a213ab32259
 # ╠═0d121fa3-fbfa-44e5-904b-64a1622ec91b
+# ╠═2c1adef4-822e-4dc0-946b-dc574e50b305
+# ╠═896e00dc-2ce9-4a9f-acc1-519aec21dd83
+# ╠═bfcb5e17-8937-4448-b090-2782818c6b6c
+# ╠═dff9eb71-a853-4186-8245-a64206379b6f
+# ╠═25ad7a18-f989-40f7-8ef1-4ca506446478
+# ╠═ee12350a-627b-4a11-99cb-38c496977d18
+# ╠═3d68d35b-2192-4640-895d-51ce8e29a368
+# ╠═a816caed-659c-4b07-b9b2-9a820d844416
+# ╠═8b57cda0-7249-440d-90b2-ff4ca27e6d6c
+# ╠═52b61a65-a2d0-4ef9-b3e3-e0eb825ca501
 # ╠═aa560aad-9de4-4e7f-92ce-316f88439d57
 # ╠═148bdc38-19e8-4dfc-80d5-ffeaee28b804
 # ╠═e7861f63-aa29-419d-a458-275c8ca9bcfb
