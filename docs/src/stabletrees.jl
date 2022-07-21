@@ -185,6 +185,19 @@ Next, let's see where the cutpoints are when we take the same random subset as a
 md"""
 As can be seen, many cutpoints are at the same location as before.
 Furthermore, compared to the unrestricted range, the chance that two different trees who see a different random subset of the data will select the same cutpoint has increased dramatically.
+
+The benefit of this is that it is now quite easy to extract the most important rules.
+It works by extracting the rules and simplifying them a bit.
+Next, the rules can be ordered by frequency of occurence to get the most important rules.
+Let's see how accurate this model is.
+"""
+
+# ╔═╡ 7e1d46b4-5f93-478d-9105-a5b0db1eaf08
+md"""
+## Benchmark
+
+For the benchmark, lets compare the decision tree, a stabilized random forest (`StableForestClassifier`), SIRUS (`StableRulesClassifier`), and LightGBM (`LGBMClassifier`).
+The latter is a state-of-the-art gradient boosting model created by Microsoft.
 """
 
 # ╔═╡ aa560aad-9de4-4e7f-92ce-316f88439d57
@@ -376,7 +389,7 @@ let
 	ax = Axis(fig[1, 1])
 	cutpoints = ST._cutpoints(subset, 10)
 	scatter!(ax, subset, fill(1, ls))
-	vlines!(ax, cutpoints; color=:red)
+	vlines!(ax, cutpoints; color=:black)
 	hideydecorations!(ax)
 	fig
 end
@@ -388,7 +401,7 @@ let
 	ax = Axis(fig[1, 1])
 	cutpoints = ST._cutpoints(nodes, 10)
 	scatter!(ax, nodes, fill(1, ln))
-	vlines!(ax, cutpoints; color=:red)
+	vlines!(ax, cutpoints; color=:black)
 	hideydecorations!(ax)
 	fig
 end
@@ -424,6 +437,7 @@ end
 # ╠═a816caed-659c-4b07-b9b2-9a820d844416
 # ╠═8b57cda0-7249-440d-90b2-ff4ca27e6d6c
 # ╠═52b61a65-a2d0-4ef9-b3e3-e0eb825ca501
+# ╠═7e1d46b4-5f93-478d-9105-a5b0db1eaf08
 # ╠═aa560aad-9de4-4e7f-92ce-316f88439d57
 # ╠═148bdc38-19e8-4dfc-80d5-ffeaee28b804
 # ╠═e7861f63-aa29-419d-a458-275c8ca9bcfb
