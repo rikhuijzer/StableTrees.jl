@@ -241,12 +241,56 @@ end;
 
 # ╔═╡ 39e073b9-a7ae-47d0-8867-a0d099625625
 md"""
-We can depict summarize results as follows:
+We can summarize the results as follows:
+"""
+
+# ╔═╡ 4a4ab7ef-659e-4048-ab16-94ad4cb4328a
+md"""
+As can be seen, the score of the stabilized random forest (`StableForestClassifier`) is almost as good as Microsoft's classifier (`LGBMClassifier`), but both are not interpretable since it requires interpreting thousands of trees.
+With the rule-based classifier (`StableRulesClassifier`), a small amount of predictive performance can be traded for high interpretability.
+Note that the rule-based classifier may actually be more accurate in practise because verifying and debugging the model is much easier.
+
+Regarding the hyperparameters, tuning `max_rules` and `max_depth` has the most effect.
+`max_rules` specifies the number of rules to which the random forest is simplified.
+Setting to a high number such as 999 makes the predictive performance similar to that of a random forest, but also makes the interpretability as bad as a random forest.
+Therefore, it makes more sense to truncate the rules to somewhere in the range 5 to 40 to obtain accurate models with high interpretability.
+`max_depth` specifies how many levels the trees have.
+For larger datasets, `max_depth=2` makes the most sense since it can find more complex patterns in the data.
+For smaller datasets, `max_depth=1` makes more sense since it reduces the chance of overfitting.
+It also simplifies the rules because with `max_depth=1`, the rule will contain only one conditional (for example, "if A then ...") versus two conditionals (for example, "if A & B then ...").
+In some cases, model accuracy can be improved by increasing `n_trees`.
+The higher this number, the more trees are fitted and, hence, the higher the chance that the right rules are extracted from the trees.
 """
 
 # ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # hideall
 ST = StableTrees;
+
+# ╔═╡ 16de5518-2a16-40ef-87a5-d2acd514d294
+md"""
+## Rule interpretation
+
+Finally, let's interpret the rules that the model has learned.
+Since we know that the model performs well on the cross-validations, we can fit our prefered model on the complete dataset:
+"""
+
+# ╔═╡ 6d0b29b6-61fb-4d16-9389-071892a3d9db
+md"""
+The interpretation of the fitted model is as follows.
+The model has learned three rules for this dataset.
+For making a prediction for some value at row `i`, the model will first look at the value for the `nodes` feature.
+If that value is below 2.0, then the probability of survival is 0.819 and the probability of not surviving is 0.181.
+To see that the 0.819 means survival, see the bottom of the result which states "and 2 classes: [0.0, 1.0]" which means that any first element means that the patient didn't survive for at least 5 years and the second element means that the patient did survive.
+As a sidenote, giving a probability for each class is useful for later when the model will need to handle multi-class and regression settings.
+The values `[0.338, 0.622]` are used when the `nodes` value is greater or equal to 2.0.
+Similarly, the model will obtain the probabilities for rules 2 and 3.
+To obtain the final result, the model will take a weighted average over the three rules.
+
+Intuitively, the 2 of the rules inside the model makes sense.
+A patient is more likely to survive if the `age` of the patient and the number of `nodes` found inside the patient are lower.
+Why patients operated before the `year` 1960 are more likely to survive is unclear to me.
+This could be an indication that the model is wrong or that there is something unexpected going on.
+"""
 
 # ╔═╡ 0e0252e7-87a8-49e4-9a48-5612e0ded41b
 md"""
@@ -325,9 +369,6 @@ function _iris()
 	return df
 end;
 
-# ╔═╡ e3056cbf-a51b-4580-8271-2065ca8c0359
-_iris()
-
 # ╔═╡ 564598d7-5bdf-4e42-b812-8aca20fa20d4
 function _haberman()
     dir = datadep"Haberman"
@@ -386,6 +427,13 @@ e3 = let
 	_evaluate(model, hyperparameters, X, y)
 end;
 
+# ╔═╡ 86ed4d56-23e6-4b4d-9b55-7067124da27f
+e3b = let
+	model = StableRulesClassifier
+	hyperparameters = (; max_depth=1, rng=_rng())
+	_evaluate(model, hyperparameters, X, y)
+end;
+
 # ╔═╡ 5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
 # ╠═╡ show_logs = false
 e4 = let
@@ -404,7 +452,7 @@ end;
 
 # ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
 results = let
-	df = DataFrame(getproperty.([e1, e2, e3, e4, e5], :row))
+	df = DataFrame(getproperty.([e1, e2, e3, e3b, e4, e5], :row))
 	rename!(df, :se => "1.96*SE")
 end
 
@@ -418,7 +466,7 @@ let
 	lr = nrow(results)
 	ax1 = Axis(grid[1, 1:6]; yticks=(1:lr, yticks), subtitle="Area under the ROC curve ")
 	ax2 = Axis(grid[1, 7]; subtitle="Interpretability")
-	interpretabilities = reverse(["low", "high", "high", "high", "high"])
+	interpretabilities = reverse(["low", "low", "high", "high", "high", "high"])
 	for i in 1:lr
 		row = results[i, :]
 		lower = row.AUC - row["1.96*SE"]
@@ -434,6 +482,15 @@ let
 	hideydecorations!(ax2)
 	hidespines!(ax2)
 	fig
+end
+
+# ╔═╡ c2650040-f398-4a2e-bfe0-ce139c6ca879
+# ╠═╡ show_logs = false
+let
+	model = StableRulesClassifier(; max_depth=1, rng=_rng())
+	mach = machine(model, X, y)
+	fit!(mach)
+	mach.fitresult
 end
 
 # ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
@@ -573,12 +630,17 @@ end
 # ╠═ab103b4e-24eb-4575-8c04-ae3fd9ec1673
 # ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
 # ╠═88a708a7-87e8-4f97-b199-70d25ba91894
+# ╠═86ed4d56-23e6-4b4d-9b55-7067124da27f
 # ╠═5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
 # ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═622beb62-51ac-4b44-9409-550e5f422fe4
 # ╠═39e073b9-a7ae-47d0-8867-a0d099625625
 # ╠═a42b5523-b3d6-4170-b1e3-0315ec2b67f8
+# ╠═4a4ab7ef-659e-4048-ab16-94ad4cb4328a
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
+# ╠═16de5518-2a16-40ef-87a5-d2acd514d294
+# ╠═c2650040-f398-4a2e-bfe0-ce139c6ca879
+# ╠═6d0b29b6-61fb-4d16-9389-071892a3d9db
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
 # ╠═ede038b3-d92e-4208-b8ab-984f3ca1810e
@@ -590,6 +652,5 @@ end
 # ╠═f593024e-411a-4cde-ac2a-1a168d0f76a1
 # ╠═2cb02c2a-6890-40d8-9323-c3f836a03617
 # ╠═06993234-d238-457d-9aac-c88574faf04a
-# ╠═e3056cbf-a51b-4580-8271-2065ca8c0359
 # ╠═564598d7-5bdf-4e42-b812-8aca20fa20d4
 # ╠═1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
