@@ -1176,7 +1176,7 @@ version = "1.0.0"
 deps = ["AbstractTrees", "CategoricalArrays", "InlineStrings", "LinearAlgebra", "MLJModelInterface", "Random", "Statistics", "Tables"]
 path = "/home/runner/work/StableTrees.jl/StableTrees.jl"
 uuid = "9113e207-2504-4b06-8eee-d78e288bee65"
-version = "1.0.0"
+version = "1.0.1"
 
 [[deps.StackViews]]
 deps = ["OffsetArrays"]
