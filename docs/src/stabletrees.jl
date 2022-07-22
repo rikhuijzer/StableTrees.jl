@@ -44,7 +44,7 @@ md"""
 This package is a pure Julia implementation of the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) algorithm.
 This package has only implemented binary classification for now.
 Regression and multiclass-classification will be implemented later.
-For R fans, the SIRUS package is also available via [CRAN](https://cran.r-project.org/web/packages/sirus/index.html).
+For R users, the SIRUS package is also available via [CRAN](https://cran.r-project.org/web/packages/sirus/index.html).
 
 The algorithm is based on random forests.
 However, compared to random forests, the model is much more interpretable since the forests are converted to a set of decison rules.
@@ -210,7 +210,7 @@ See the Appendix for more details about these results.
 
 # ╔═╡ 39e073b9-a7ae-47d0-8867-a0d099625625
 md"""
-We can summarize the results as follows:
+We can summarize these results as follows:
 """
 
 # ╔═╡ 4a4ab7ef-659e-4048-ab16-94ad4cb4328a
@@ -526,7 +526,7 @@ let
 	
 	yticks = string.(results.Model, results.Hyperparameters)
 	lr = nrow(results)
-	ax1 = Axis(grid[1, 1:6]; yticks=(1:lr, yticks), subtitle="Area under the ROC curve ")
+	ax1 = Axis(grid[1, 1:6]; yticks=(1:lr, yticks), subtitle="Area under the ROC curve and standard error")
 	ax2 = Axis(grid[1, 7]; subtitle="Interpretability")
 	interpretabilities = reverse(["low", "low", "high", "high", "high", "high"])
 	for i in 1:lr
