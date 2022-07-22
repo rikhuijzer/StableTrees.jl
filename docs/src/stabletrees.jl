@@ -19,11 +19,14 @@ end
 
 # ╔═╡ f833dab6-31d4-4353-a68b-ef0501d606d4
 begin
+	ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
+
 	using CairoMakie
 	using CategoricalArrays: categorical
 	using CSV: CSV
-	using MLDatasets: BostonHousing
-	using DataFrames: DataFrame, Not, dropmissing!, rename!, select!
+	using DataDeps: DataDeps, DataDep, @datadep_str
+	using MLDatasets: BostonHousing, Iris
+	using DataFrames: DataFrame, Not, dropmissing!, filter!, nrow, rename!, select!
 	using LightGBM.MLJInterface: LGBMClassifier
 	using MLJDecisionTreeInterface: DecisionTree, DecisionTreeClassifier
 	using MLJ: CV, MLJ, Not, PerformanceEvaluation, auc, fit!, evaluate, machine
@@ -197,9 +200,9 @@ Let's see how accurate this model is.
 
 # ╔═╡ 7e1d46b4-5f93-478d-9105-a5b0db1eaf08
 md"""
-## Demo
+## Benchmarks
 
-As a demonstration, lets compare the following models:
+Let'ss compare the following models:
 
 - Decision tree (`DecisionTreeClassifier`)
 - Stabilized random forest (`StableForestClassifier`)
@@ -226,16 +229,18 @@ _hyper2str(hyper::NamedTuple) = hyper == (;) ? "(;)" : string(hyper)::String;
 # ╔═╡ cece10be-736e-4ee1-8c57-89beb0608a92
 function _evaluate(modeltype, hyperparameters, X, y)
     model = modeltype(; hyperparameters...)
-	e = evaluate(model, X, y)
+	e = _evaluate(model, X, y)
 	row = (;
 	    Model=_pretty_name(modeltype),
 	    Hyperparameters=_hyper2str(_filter_rng(hyperparameters)),
 	    AUC=_score(e),
 	    se=round(only(MLJ.MLJBase._standard_errors(e)); digits=2)
 	)
+	(; e, row)
 end;
 
 # ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
+# hideall
 ST = StableTrees;
 
 # ╔═╡ 0e0252e7-87a8-49e4-9a48-5612e0ded41b
@@ -302,14 +307,43 @@ function _boston()
 	return df
 end;
 
+# ╔═╡ 06993234-d238-457d-9aac-c88574faf04a
+function _iris()
+	df = Iris()
+	df = hcat(df.features, df.targets)
+	df[!, :class] = string.(df.class)
+	@show unique(df.class)
+	filter!(:class => !=("Iris-virginica"), df)
+	df[!, :class] = categorical([string(class) == "Iris-setosa" ? 0 : 1 for class in df.class])
+	@assert nrow(df) == 100
+	@assert length(filter(==(0), df.class)) == 50
+	return df
+end;
+
+# ╔═╡ e3056cbf-a51b-4580-8271-2065ca8c0359
+_iris()
+
+# ╔═╡ 564598d7-5bdf-4e42-b812-8aca20fa20d4
+function _haberman()
+    dir = datadep"Haberman"
+    path = joinpath(dir, "haberman.csv")
+    df = CSV.read(path, DataFrame)
+    df[!, :survival] = categorical(df.survival)
+    # Need Floats for the LGBMClassifier.
+    for col in [:age, :year, :nodes]
+        df[!, col] = float.(df[:, col])
+    end
+    return df
+end;
+
 # ╔═╡ 961aa273-d97b-497f-a79a-06bf89dc34b0
-boston = _boston()
+boston = _haberman()
 
 # ╔═╡ 6e16f844-9365-43af-9ea7-2984808f1fd5
-X = MLJ.table(MLJ.matrix(boston[:, Not(:MEDV)]));
+X = boston[:, Not(:survival)];
 
 # ╔═╡ b6957225-1889-49fb-93e2-f022ca7c3b23
-y = boston.MEDV;
+y = boston.survival;
 
 # ╔═╡ 48110693-1aee-4af7-878d-0ae9a545657d
 length(filter(==(0), y))
@@ -334,26 +368,35 @@ end;
 # ╔═╡ 6ea43d21-1cc0-4bca-8683-dce67f592949
 # ╠═╡ show_logs = false
 e2 = let
-	model = StableForestClassifier
-	hyperparameters = (; n_trees=1500, rng=_rng())
+	model = StableRulesClassifier
+	hyperparameters = (; max_rules=10, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
+
+# ╔═╡ debbdc87-40ef-4f86-ab2a-e6aa41217cf7
+e2.e
 
 # ╔═╡ 88a708a7-87e8-4f97-b199-70d25ba91894
 # ╠═╡ show_logs = false
 e3 = let
 	model = StableRulesClassifier
-	hyperparameters = (; n_trees=1500, max_rules=10, rng=_rng())
+	hyperparameters = (;  max_rules=25, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
 
 # ╔═╡ 5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
 # ╠═╡ show_logs = false
 e4 = let
-	model = StableRulesClassifier
-	hyperparameters = (; n_trees=1500, max_rules=25, rng=_rng())
+	model = StableForestClassifier
+	hyperparameters = (; max_depth=2, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
+
+# ╔═╡ f2257d8f-0f9c-4438-bf3b-b6330b4c9e2d
+first.([e4])
+
+# ╔═╡ 6523492b-b66c-471b-bc81-36e6b1f3d010
+e4.e.fitted_params_per_fold[1]
 
 # ╔═╡ 6ca70265-ede3-4efd-86fa-e6940a45e84f
 # ╠═╡ show_logs = false
@@ -372,10 +415,16 @@ e6 = let
 end;
 
 # ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
-let
-	df = DataFrame([e1, e2, e3, e4, e5, e6])
+results = let
+	df = DataFrame(getproperty.([e1, e2, e3, e4, e5, e6], :row))
 	rename!(df, :se => "1.96*SE")
 end
+
+# ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
+foo = _evaluate(StableForestClassifier(; rng=_rng()), X, y)
+
+# ╔═╡ f593024e-411a-4cde-ac2a-1a168d0f76a1
+_score(foo)
 
 # ╔═╡ 39fd9deb-2a27-4c28-ae06-2a36c4c54427
 let
@@ -394,7 +443,7 @@ let
 end
 
 # ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
-nox = sort(boston.NOX);
+nox = sort(boston.petalwidth);
 
 # ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # hideall
@@ -454,6 +503,16 @@ end
 # hideall
 _plot_cutpoints(nox)
 
+# ╔═╡ 1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
+let
+	dir = datadep"wisconsin"
+	path = joinpath(dir, "breast-cancer-wisconsin.data")
+	header = string.(1:11)
+	df = CSV.read(path, DataFrame; header)
+	@show names(df)
+	rename!(df, 1 => :radius)
+end
+
 # ╔═╡ Cell order:
 # ╠═7c10c275-54d8-4f1a-947f-7861199cdf21
 # ╠═e9028115-d098-4c61-a82f-d4553fe654f8
@@ -502,6 +561,9 @@ _plot_cutpoints(nox)
 # ╠═6ca70265-ede3-4efd-86fa-e6940a45e84f
 # ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═622beb62-51ac-4b44-9409-550e5f422fe4
+# ╠═debbdc87-40ef-4f86-ab2a-e6aa41217cf7
+# ╠═f2257d8f-0f9c-4438-bf3b-b6330b4c9e2d
+# ╠═6523492b-b66c-471b-bc81-36e6b1f3d010
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
@@ -510,4 +572,10 @@ _plot_cutpoints(nox)
 # ╠═93a7dd3b-7810-4021-bf6e-ae9c04acea46
 # ╠═be324728-1b60-4584-b8ea-c4fe9e3466af
 # ╠═7ad3cf67-2acd-44c6-aa91-7d5ae809dfbc
+# ╠═892da914-c5ec-4e56-a5e0-6cbff6cd6217
+# ╠═f593024e-411a-4cde-ac2a-1a168d0f76a1
 # ╠═2cb02c2a-6890-40d8-9323-c3f836a03617
+# ╠═06993234-d238-457d-9aac-c88574faf04a
+# ╠═e3056cbf-a51b-4580-8271-2065ca8c0359
+# ╠═564598d7-5bdf-4e42-b812-8aca20fa20d4
+# ╠═1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
