@@ -23,7 +23,7 @@ begin
 	using CategoricalArrays: categorical
 	using CSV: CSV
 	using MLDatasets: BostonHousing
-	using DataFrames: DataFrame, Not, dropmissing!, select!
+	using DataFrames: DataFrame, Not, dropmissing!, rename!, select!
 	using LightGBM.MLJInterface: LGBMClassifier
 	using MLJDecisionTreeInterface: DecisionTree, DecisionTreeClassifier
 	using MLJ: CV, MLJ, Not, PerformanceEvaluation, auc, fit!, evaluate, machine
@@ -176,11 +176,8 @@ For each feature, they find `q` empirical quantiles where `q` is typically 10.
 Let's overlay these quantiles on top of the `NOX` feature:
 """
 
-# ╔═╡ a816caed-659c-4b07-b9b2-9a820d844416
+# ╔═╡ 0cc970cd-b7ed-4782-a520-ff0a76fe0453
 md"""
-The reason that these cutpoints lay much to the left is that there are many datapoints at the left.
-For most people, few auxillary `nodes` were detected.
-
 Next, let's see where the cutpoints are when we take the same random subset as above:
 """
 
@@ -200,9 +197,9 @@ Let's see how accurate this model is.
 
 # ╔═╡ 7e1d46b4-5f93-478d-9105-a5b0db1eaf08
 md"""
-## Benchmark
+## Demo
 
-For the benchmark, lets compare the following models:
+As a demonstration, lets compare the following models:
 
 - Decision tree (`DecisionTreeClassifier`)
 - Stabilized random forest (`StableForestClassifier`)
@@ -237,10 +234,6 @@ function _evaluate(modeltype, hyperparameters, X, y)
 	    se=round(only(MLJ.MLJBase._standard_errors(e)); digits=2)
 	)
 end;
-
-# ╔═╡ 83700ef9-f833-49d0-9ee9-76eb56f643e9
-# hideall
-markers(Y) = [y == 1 ? :circle : :cross for y in Y]
 
 # ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
 ST = StableTrees;
@@ -306,7 +299,6 @@ function _boston()
     m = mean(df[:, target]) # 22.5 thousand dollars.
     df[!, target] = categorical([value < m ? 0 : 1 for value in df[:, target]])
 	select!(df, target, :)
-	select!(df, Not(:B))
 	return df
 end;
 
@@ -314,7 +306,7 @@ end;
 boston = _boston()
 
 # ╔═╡ 6e16f844-9365-43af-9ea7-2984808f1fd5
-X = boston[:, Not(:MEDV)];
+X = MLJ.table(MLJ.matrix(boston[:, Not(:MEDV)]));
 
 # ╔═╡ b6957225-1889-49fb-93e2-f022ca7c3b23
 y = boston.MEDV;
@@ -332,9 +324,10 @@ tree_evaluations = let
 end;
 
 # ╔═╡ ab103b4e-24eb-4575-8c04-ae3fd9ec1673
+# ╠═╡ show_logs = false
 e1 = let
 	model = DecisionTreeClassifier
-	hyperparameters = (; max_depth=2, rng=_rng(3))
+	hyperparameters = (; max_depth=2, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
 
@@ -342,7 +335,7 @@ end;
 # ╠═╡ show_logs = false
 e2 = let
 	model = StableForestClassifier
-	hyperparameters = (; rng=_rng())
+	hyperparameters = (; n_trees=1500, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
 
@@ -350,7 +343,7 @@ end;
 # ╠═╡ show_logs = false
 e3 = let
 	model = StableRulesClassifier
-	hyperparameters = (; max_rules=10, rng=_rng())
+	hyperparameters = (; n_trees=1500, max_rules=10, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
 
@@ -358,7 +351,7 @@ end;
 # ╠═╡ show_logs = false
 e4 = let
 	model = StableRulesClassifier
-	hyperparameters = (; max_rules=25, rng=_rng())
+	hyperparameters = (; n_trees=1500, max_rules=25, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
 
@@ -381,6 +374,7 @@ end;
 # ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
 let
 	df = DataFrame([e1, e2, e3, e4, e5, e6])
+	rename!(df, :se => "1.96*SE")
 end
 
 # ╔═╡ 39fd9deb-2a27-4c28-ae06-2a36c4c54427
@@ -422,18 +416,25 @@ let
 	fig = Figure(; resolution=(800, 100))
 	ax = Axis(fig[1, 1])
 	scatter!(ax, nox, fill(1, ln))
-	vlines!(ax, [nox[300]]; color=:red)
+	vlines!(ax, [nox[402]]; color=:red)
+	annotation = string(round(nox[402]; digits=2))
+	text!(ax, nox[402] + 0.003, 1.08; text=annotation, textsize=11)
 	hideydecorations!(ax)
+	ylims!(ax, 0.9, 1.2)
 	fig
 end
 
 # ╔═╡ bfcb5e17-8937-4448-b090-2782818c6b6c
 # hideall
-subset = collect(ST._rand_subset(_rng(3), nox, round(Int, 0.7 * ln)));
+subset = collect(ST._rand_subset(_rng(11), nox, round(Int, 0.7 * ln)));
 
 # ╔═╡ dff9eb71-a853-4186-8245-a64206379b6f
 # hideall
 ls = length(subset);
+
+# ╔═╡ 8fdc24d9-1f6b-4094-9722-6b5b6c713f12
+# hideall
+_plot_cutpoints(subset)
 
 # ╔═╡ 25ad7a18-f989-40f7-8ef1-4ca506446478
 # hideall
@@ -441,22 +442,17 @@ let
 	fig = Figure(; resolution=(800, 100))
 	ax = Axis(fig[1, 1])
 	scatter!(ax, subset, fill(1, ls))
+	vlines!(ax, [nox[402]]; color=:red, linestyle=:dash)
+	annotation = string(round(nox[402]; digits=2))
+	text!(ax, nox[402] + 0.003, 1.08; text=annotation, textsize=11)
 	hideydecorations!(ax)
+	ylims!(ax, 0.9, 1.2)
 	fig
 end
 
-# ╔═╡ 1471aac2-140f-4b2f-a3e6-15bca257f9f6
-_plot_cutpoints(subset)
-
 # ╔═╡ 4935d8f5-32e1-429c-a8c1-84c242eff4bf
+# hideall
 _plot_cutpoints(nox)
-
-# ╔═╡ ef3605ec-93dc-4b9f-b4f1-3014b881c349
-let
-	c1 = unique(ST._cutpoints(nox, 10))
-	c2 = (ST._cutpoints(subset, 10))
-	count(c1 .== c2)
-end
 
 # ╔═╡ Cell order:
 # ╠═7c10c275-54d8-4f1a-947f-7861199cdf21
@@ -489,10 +485,9 @@ end
 # ╠═25ad7a18-f989-40f7-8ef1-4ca506446478
 # ╠═ee12350a-627b-4a11-99cb-38c496977d18
 # ╠═4935d8f5-32e1-429c-a8c1-84c242eff4bf
-# ╠═1471aac2-140f-4b2f-a3e6-15bca257f9f6
-# ╠═a816caed-659c-4b07-b9b2-9a820d844416
+# ╠═0cc970cd-b7ed-4782-a520-ff0a76fe0453
+# ╠═8fdc24d9-1f6b-4094-9722-6b5b6c713f12
 # ╠═01b08d44-4b9b-42e2-bb20-f34cb9b407f3
-# ╠═ef3605ec-93dc-4b9f-b4f1-3014b881c349
 # ╠═6cb0ded0-8f49-498a-8fe9-7ce3ea10d945
 # ╠═7e1d46b4-5f93-478d-9105-a5b0db1eaf08
 # ╠═1d08ca81-a18a-4a74-992c-14243d2ea7dc
@@ -507,7 +502,6 @@ end
 # ╠═6ca70265-ede3-4efd-86fa-e6940a45e84f
 # ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═622beb62-51ac-4b44-9409-550e5f422fe4
-# ╠═83700ef9-f833-49d0-9ee9-76eb56f643e9
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
