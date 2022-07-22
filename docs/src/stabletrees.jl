@@ -188,13 +188,9 @@ Next, let's see where the cutpoints are when we take the same random subset as a
 md"""
 As can be seen, many cutpoints are at the same location as before.
 Furthermore, compared to the unrestricted range, the chance that two different trees who see a different random subset of the data will select the same cutpoint has increased dramatically.
-"""
 
-# ╔═╡ 6cb0ded0-8f49-498a-8fe9-7ce3ea10d945
-md"""
 The benefit of this is that it is now quite easy to extract the most important rules.
-It works by extracting the rules and simplifying them a bit.
-Next, the rules can be ordered by frequency of occurence to get the most important rules.
+Rule extraction consists of simplifying them a bit and ordering them by frequency of occurrence.
 Let's see how accurate this model is.
 """
 
@@ -202,7 +198,7 @@ Let's see how accurate this model is.
 md"""
 ## Benchmarks
 
-Let'ss compare the following models:
+Let's compare the following models:
 
 - Decision tree (`DecisionTreeClassifier`)
 - Stabilized random forest (`StableForestClassifier`)
@@ -210,34 +206,8 @@ Let'ss compare the following models:
 - LightGBM (`LGBMClassifier`)
 
 The latter is a state-of-the-art gradient boosting model created by Microsoft.
+See the Appendix for more details about these results.
 """
-
-# ╔═╡ 1d08ca81-a18a-4a74-992c-14243d2ea7dc
-function _score(e::PerformanceEvaluation)
-	return round(only(e.measurement); digits=2)
-end;
-
-# ╔═╡ 4dcd564a-5b2f-4eae-87d6-c2973b828282
-_filter_rng(hyper::NamedTuple) = Base.structdiff(hyper, (; rng=:foo));
-
-# ╔═╡ 7a9a0242-a7ba-4508-82fd-a48084525afe
-_pretty_name(modeltype) = last(split(string(modeltype), '.'));
-
-# ╔═╡ 6a539bb4-f51f-4efa-af48-c43318ed2502
-_hyper2str(hyper::NamedTuple) = hyper == (;) ? "(;)" : string(hyper)::String;
-
-# ╔═╡ cece10be-736e-4ee1-8c57-89beb0608a92
-function _evaluate(modeltype, hyperparameters, X, y)
-    model = modeltype(; hyperparameters...)
-	e = _evaluate(model, X, y)
-	row = (;
-	    Model=_pretty_name(modeltype),
-	    Hyperparameters=_hyper2str(_filter_rng(hyperparameters)),
-	    AUC=_score(e),
-	    se=round(only(MLJ.MLJBase._standard_errors(e)); digits=2)
-	)
-	(; e, row)
-end;
 
 # ╔═╡ 39e073b9-a7ae-47d0-8867-a0d099625625
 md"""
@@ -315,7 +285,7 @@ function _plot_cutpoints(data::AbstractVector)
 	textlocs = [(c, 1.1) for c in cutpoints]
 	for cutpoint in cutpoints
 		annotation = string(round(cutpoint; digits=2))::String
-		text!(ax, cutpoint + 0.003, 1.08; text=annotation, textsize=11)
+		text!(ax, cutpoint + 0.2, 1.08; text=annotation, textsize=13)
 	end
 	ylims!(ax, 0.9, 1.2)
 	hideydecorations!(ax)
@@ -397,11 +367,138 @@ length(filter(==(0), y))
 # ╔═╡ 4dc13f14-41cf-4589-a057-ef69aee783f8
 length(filter(==(1), y))
 
+# ╔═╡ c2650040-f398-4a2e-bfe0-ce139c6ca879
+# ╠═╡ show_logs = false
+let
+	model = StableRulesClassifier(; max_depth=1, rng=_rng())
+	mach = machine(model, X, y)
+	fit!(mach)
+	mach.fitresult
+end
+
+# ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
+nodes = sort(boston.age);
+
+# ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
+# hideall
+ln = length(nodes);
+
+# ╔═╡ de90efc9-2171-4406-93a1-9a213ab32259
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	scatter!(ax, nodes, fill(1, ln))
+	hideydecorations!(ax)
+	fig
+end
+
+# ╔═╡ 8d1b30bd-0ad2-416e-a36a-f263ef781289
+# hideall
+index = length(nodes) - 3;
+
+# ╔═╡ 2c1adef4-822e-4dc0-946b-dc574e50b305
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	scatter!(ax, nodes, fill(1, ln))
+	vlines!(ax, [nodes[index]]; color=:red)
+	annotation = string(round(nodes[index]; digits=2))
+	text!(ax, nodes[index] + 0.003, 1.08; text=annotation, textsize=11)
+	hideydecorations!(ax)
+	ylims!(ax, 0.9, 1.2)
+	fig
+end
+
+# ╔═╡ bfcb5e17-8937-4448-b090-2782818c6b6c
+# hideall
+subset = collect(ST._rand_subset(_rng(3), nodes, round(Int, 0.7 * ln)));
+
+# ╔═╡ dff9eb71-a853-4186-8245-a64206379b6f
+# hideall
+ls = length(subset);
+
+# ╔═╡ 8fdc24d9-1f6b-4094-9722-6b5b6c713f12
+# hideall
+_plot_cutpoints(subset)
+
+# ╔═╡ 25ad7a18-f989-40f7-8ef1-4ca506446478
+# hideall
+let
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	scatter!(ax, subset, fill(1, ls))
+	vlines!(ax, [nodes[index]]; color=:red, linestyle=:dash)
+	annotation = string(round(nodes[index]; digits=2))
+	text!(ax, nodes[index] + 0.003, 1.08; text=annotation, textsize=11)
+	hideydecorations!(ax)
+	ylims!(ax, 0.9, 1.2)
+	fig
+end
+
+# ╔═╡ 4935d8f5-32e1-429c-a8c1-84c242eff4bf
+# hideall
+_plot_cutpoints(nodes)
+
+# ╔═╡ 1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
+let
+	dir = datadep"wisconsin"
+	path = joinpath(dir, "breast-cancer-wisconsin.data")
+	header = string.(1:11)
+	df = CSV.read(path, DataFrame; header)
+	@show names(df)
+	rename!(df, 1 => :radius)
+end
+
+# ╔═╡ 4dcd564a-5b2f-4eae-87d6-c2973b828282
+_filter_rng(hyper::NamedTuple) = Base.structdiff(hyper, (; rng=:foo));
+
+# ╔═╡ 7a9a0242-a7ba-4508-82fd-a48084525afe
+_pretty_name(modeltype) = last(split(string(modeltype), '.'));
+
+# ╔═╡ 6a539bb4-f51f-4efa-af48-c43318ed2502
+_hyper2str(hyper::NamedTuple) = hyper == (;) ? "(;)" : string(hyper)::String;
+
+# ╔═╡ 1d08ca81-a18a-4a74-992c-14243d2ea7dc
+function _score(e::PerformanceEvaluation)
+	return round(only(e.measurement); digits=2)
+end;
+
+# ╔═╡ cece10be-736e-4ee1-8c57-89beb0608a92
+function _evaluate(modeltype, hyperparameters, X, y)
+    model = modeltype(; hyperparameters...)
+	e = _evaluate(model, X, y)
+	row = (;
+	    Model=_pretty_name(modeltype),
+	    Hyperparameters=_hyper2str(_filter_rng(hyperparameters)),
+	    AUC=_score(e),
+	    se=round(only(MLJ.MLJBase._standard_errors(e)); digits=2)
+	)
+	(; e, row)
+end;
+
 # ╔═╡ 9e313f2c-08d9-424f-9ea4-4a4641371360
 tree_evaluations = let
 	model = DecisionTreeClassifier(; max_depth=2, rng=_rng())
 	_evaluate(model, X, y)
 end;
+
+# ╔═╡ 39fd9deb-2a27-4c28-ae06-2a36c4c54427
+let
+	tree = tree_evaluations.fitted_params_per_fold[1].tree
+	_io2text() do io
+		DecisionTree.print_tree(io, tree; feature_names=names(boston))
+	end
+end
+
+# ╔═╡ 368b6fc1-1cf1-47b5-a746-62c5786dc143
+let
+	tree = tree_evaluations.fitted_params_per_fold[2].tree
+	_io2text() do io
+		DecisionTree.print_tree(io, tree; feature_names=names(boston))
+	end
+end
 
 # ╔═╡ ab103b4e-24eb-4575-8c04-ae3fd9ec1673
 # ╠═╡ show_logs = false
@@ -428,7 +525,7 @@ e3 = let
 end;
 
 # ╔═╡ 86ed4d56-23e6-4b4d-9b55-7067124da27f
-e3b = let
+e4 = let
 	model = StableRulesClassifier
 	hyperparameters = (; max_depth=1, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
@@ -436,7 +533,7 @@ end;
 
 # ╔═╡ 5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
 # ╠═╡ show_logs = false
-e4 = let
+e5 = let
 	model = StableForestClassifier
 	hyperparameters = (; max_depth=2, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
@@ -444,7 +541,7 @@ end;
 
 # ╔═╡ 263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═╡ show_logs = false
-e5 = let
+e6 = let
 	model = LGBMClassifier
 	hyperparameters = (; )
 	_evaluate(model, hyperparameters, X, y)
@@ -452,7 +549,7 @@ end;
 
 # ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
 results = let
-	df = DataFrame(getproperty.([e1, e2, e3, e3b, e4, e5], :row))
+	df = DataFrame(getproperty.([e1, e2, e3, e4, e5, e6], :row))
 	rename!(df, :se => "1.96*SE")
 end
 
@@ -484,107 +581,11 @@ let
 	fig
 end
 
-# ╔═╡ c2650040-f398-4a2e-bfe0-ce139c6ca879
-# ╠═╡ show_logs = false
-let
-	model = StableRulesClassifier(; max_depth=1, rng=_rng())
-	mach = machine(model, X, y)
-	fit!(mach)
-	mach.fitresult
-end
-
 # ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
 foo = _evaluate(StableForestClassifier(; rng=_rng()), X, y)
 
 # ╔═╡ f593024e-411a-4cde-ac2a-1a168d0f76a1
 _score(foo)
-
-# ╔═╡ 39fd9deb-2a27-4c28-ae06-2a36c4c54427
-let
-	tree = tree_evaluations.fitted_params_per_fold[1].tree
-	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(boston))
-	end
-end
-
-# ╔═╡ 368b6fc1-1cf1-47b5-a746-62c5786dc143
-let
-	tree = tree_evaluations.fitted_params_per_fold[2].tree
-	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(boston))
-	end
-end
-
-# ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
-nox = sort(boston.petalwidth);
-
-# ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
-# hideall
-ln = length(nox);
-
-# ╔═╡ de90efc9-2171-4406-93a1-9a213ab32259
-# hideall
-let
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	scatter!(ax, nox, fill(1, ln))
-	hideydecorations!(ax)
-	fig
-end
-
-# ╔═╡ 2c1adef4-822e-4dc0-946b-dc574e50b305
-# hideall
-let
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	scatter!(ax, nox, fill(1, ln))
-	vlines!(ax, [nox[402]]; color=:red)
-	annotation = string(round(nox[402]; digits=2))
-	text!(ax, nox[402] + 0.003, 1.08; text=annotation, textsize=11)
-	hideydecorations!(ax)
-	ylims!(ax, 0.9, 1.2)
-	fig
-end
-
-# ╔═╡ bfcb5e17-8937-4448-b090-2782818c6b6c
-# hideall
-subset = collect(ST._rand_subset(_rng(11), nox, round(Int, 0.7 * ln)));
-
-# ╔═╡ dff9eb71-a853-4186-8245-a64206379b6f
-# hideall
-ls = length(subset);
-
-# ╔═╡ 8fdc24d9-1f6b-4094-9722-6b5b6c713f12
-# hideall
-_plot_cutpoints(subset)
-
-# ╔═╡ 25ad7a18-f989-40f7-8ef1-4ca506446478
-# hideall
-let
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	scatter!(ax, subset, fill(1, ls))
-	vlines!(ax, [nox[402]]; color=:red, linestyle=:dash)
-	annotation = string(round(nox[402]; digits=2))
-	text!(ax, nox[402] + 0.003, 1.08; text=annotation, textsize=11)
-	hideydecorations!(ax)
-	ylims!(ax, 0.9, 1.2)
-	fig
-end
-
-# ╔═╡ 4935d8f5-32e1-429c-a8c1-84c242eff4bf
-# hideall
-_plot_cutpoints(nox)
-
-# ╔═╡ 1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
-let
-	dir = datadep"wisconsin"
-	path = joinpath(dir, "breast-cancer-wisconsin.data")
-	header = string.(1:11)
-	df = CSV.read(path, DataFrame; header)
-	@show names(df)
-	rename!(df, 1 => :radius)
-end
 
 # ╔═╡ Cell order:
 # ╠═7c10c275-54d8-4f1a-947f-7861199cdf21
@@ -610,6 +611,7 @@ end
 # ╠═cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # ╠═de90efc9-2171-4406-93a1-9a213ab32259
 # ╠═0d121fa3-fbfa-44e5-904b-64a1622ec91b
+# ╠═8d1b30bd-0ad2-416e-a36a-f263ef781289
 # ╠═2c1adef4-822e-4dc0-946b-dc574e50b305
 # ╠═896e00dc-2ce9-4a9f-acc1-519aec21dd83
 # ╠═bfcb5e17-8937-4448-b090-2782818c6b6c
@@ -620,13 +622,7 @@ end
 # ╠═0cc970cd-b7ed-4782-a520-ff0a76fe0453
 # ╠═8fdc24d9-1f6b-4094-9722-6b5b6c713f12
 # ╠═01b08d44-4b9b-42e2-bb20-f34cb9b407f3
-# ╠═6cb0ded0-8f49-498a-8fe9-7ce3ea10d945
 # ╠═7e1d46b4-5f93-478d-9105-a5b0db1eaf08
-# ╠═1d08ca81-a18a-4a74-992c-14243d2ea7dc
-# ╠═4dcd564a-5b2f-4eae-87d6-c2973b828282
-# ╠═7a9a0242-a7ba-4508-82fd-a48084525afe
-# ╠═6a539bb4-f51f-4efa-af48-c43318ed2502
-# ╠═cece10be-736e-4ee1-8c57-89beb0608a92
 # ╠═ab103b4e-24eb-4575-8c04-ae3fd9ec1673
 # ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
 # ╠═88a708a7-87e8-4f97-b199-70d25ba91894
@@ -654,3 +650,8 @@ end
 # ╠═06993234-d238-457d-9aac-c88574faf04a
 # ╠═564598d7-5bdf-4e42-b812-8aca20fa20d4
 # ╠═1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
+# ╠═4dcd564a-5b2f-4eae-87d6-c2973b828282
+# ╠═7a9a0242-a7ba-4508-82fd-a48084525afe
+# ╠═cece10be-736e-4ee1-8c57-89beb0608a92
+# ╠═6a539bb4-f51f-4efa-af48-c43318ed2502
+# ╠═1d08ca81-a18a-4a74-992c-14243d2ea7dc
