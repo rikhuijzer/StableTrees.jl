@@ -8,6 +8,8 @@ using InteractiveUtils
 # ╠═╡ show_logs = false
 # hideall
 begin
+	ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
+
 	PKGDIR = dirname(dirname(@__DIR__))
 	PROJECT_DIR = @__DIR__
 	using Pkg: Pkg
@@ -15,25 +17,20 @@ begin
 	Pkg.develop(; path=PKGDIR)
 end
 
-# ╔═╡ 148bdc38-19e8-4dfc-80d5-ffeaee28b804
-using StableRNGs
-
-# ╔═╡ 5366a8f7-1465-4f0a-b9c8-096818104c24
-using CategoricalArrays: categorical
-
-# ╔═╡ 758d8562-f88d-47bd-82aa-22caeda9c208
-using StableTrees
-
 # ╔═╡ f833dab6-31d4-4353-a68b-ef0501d606d4
 begin
 	using CairoMakie
+	using CategoricalArrays: categorical
 	using CSV: CSV
-	using DataDeps: DataDeps, DataDep, @datadep_str
-	using DataFrames: DataFrame
+	using MLDatasets: BostonHousing
+	using DataFrames: DataFrame, Not, dropmissing!, select!
+	using LightGBM.MLJInterface: LGBMClassifier
 	using MLJDecisionTreeInterface: DecisionTree, DecisionTreeClassifier
-	using MLJ: CV, MLJ, Not, auc, fit!, evaluate, machine
+	using MLJ: CV, MLJ, Not, PerformanceEvaluation, auc, fit!, evaluate, machine
 	using PlutoUI: TableOfContents # hide
 	using StableRNGs: StableRNG
+	using StableTrees: StableTrees, StableForestClassifier, StableRulesClassifier
+	using Statistics: mean
 end
 
 # ╔═╡ e9028115-d098-4c61-a82f-d4553fe654f8
@@ -43,6 +40,7 @@ TableOfContents()
 # ╔═╡ b1c17349-fd80-43f1-bbc2-53fdb539d1c0
 md"""
 This package implements the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) for binary classification.
+(Regression and multiclass-classification will be implemented later.)
 SIRUS is based on random forests.
 However, compared to random forests, the results are much easier to explain since the forests are converted to a set of decison rules.
 This page will provide an overview of the algorithm and describe not only how it can be used but also how it works.
@@ -60,16 +58,21 @@ As an example, we take Haberman's Survival Data Set (see the Appendix below for 
 
 # ╔═╡ 4c8dd68d-b193-4846-8d93-ab33512c3fa2
 md"""
-This dataset contains observations from a study with patients who had breast cancer.
-The `survival` column contains a `0` if a patient has died within 5 years and `1` if the patient has survived for at least 5 years.
-The aim is to predict survival based on the `age`, the `year` in which the operation was conducted and the number of detected auxillary `nodes`.
+This dataset contains information on [housing in Boston, MA](http://www.cs.toronto.edu/~delve/data/boston/bostonDetail.html).
+The `MEDV` column contains a `0` if the house price is below the mean of all the known values of occupied homes.
+Specifically, the column contains a `0` if the house price is below 22.5 thousand dollars and a `1` if the house price is below 22.5 thousand dollars.
+The mean house price is so low because of inflation; the dataset is from 1978.
+Anyway, as a last check, the dataset is reasonably well balanced:
+"""
 
+# ╔═╡ f75aa57f-6e84-4f7e-88e4-11a00cb9ad2b
+md"""
 Via [`MLJ.jl`](https://github.com/alan-turing-institute/MLJ.jl), we can fit multiple decision trees on this dataset:
 """
 
 # ╔═╡ e5a45b1a-d761-4279-834b-216df2a1dbb5
 md"""
-This has fitted various trees to various subsets of the dataset.
+This has fitted various trees to various subsets of the dataset via cross-validation.
 Here, I've set `max_depth=2` to simplify the fitted trees which makes the tree more easily explainable.
 Also, for our small dataset, this forces the model to remain simple so it likely reduces overfitting.
 Let's look at the first tree:
@@ -87,26 +90,25 @@ In other words, let's see how the fitted model for the second split looks:
 
 # ╔═╡ 5318414e-5c87-4be0-bcd0-b6efd4eee5b9
 md"""
-This shows that although the features in the tree are the same, the values are not.
-For larger datasets, you will even see that the tree can look completely different for small data-pertubations.
+This shows that the features and the values for the splitpoints are not the same for both trees.
 This is called stability.
 Or in this case, a decision tree is considered to be unstable.
 This unstability is problematic in situations where real-world decisions are based on the outcome of the model.
 Imagine using this model for the selecting which students are allowed to enter some university.
 If the model is updated every year with the data from the last year, then the selection criteria would vary wildly per year.
-https://christophm.github.io/interpretable-ml-book/
 This unstability also causes accuracy to fluctuate wildly.
 Intuitively, this makes sense: if the model changes wildly for small data changes, then model accuracy also changes wildly.
+This intuitively also implies that the model is more likely to overfit.
 This is why random forests were introduced.
 Basically, random forests fit a large number of trees and average their predictions to come to a more accurate prediction.
 The individual trees are obtained by restricting the observations and the features that the trees are allowed to use.
 For the restriction on the observations, the trees are only allowed to see `partial_sampling * n` observations.
-In practise, this is often `0.7`.
+In practise, `partial_sampling` is often 0.7.
 The restriction on the features is defined in such a way that it guarantees that not every tree will take the same split at the root of the tree.
 This makes the trees less correlated (James et al., [2021](https://doi.org/10.1007/978-1-0716-1418-1; Section 8.2.2)) and, hence, very accurate.
 
 Unfortunately, these random forests are hard to interpret.
-To interpret the model, individuals would need to read hundreds to thousands of trees containing multiple levels.
+To interpret the model, individuals would need to interpret hundreds to thousands of trees containing multiple levels.
 Alternatively, methods have been created to visualize these uninterpretable models (for example, see Molnar ([2022](https://christophm.github.io/interpretable-ml-book/)); Chapters 6, 7 and 8).
 The most promising one of these methods are Shapley values and SHAP.
 These methods show which features have the highest influence on the prediction.
@@ -149,7 +151,8 @@ md"""
 
 In the papers which introduce SIRUS, Bénard et al. ([2021a](https://doi.org/10.1214/20-EJS1792), [2021b](https://proceedings.mlr.press/v130/benard21a.html)) proof that their algorithm is stable and that the other algorithms are not.
 They achieve their stability by restricting the location at which the splitpoints can be chosen.
-To see how this works, let's look at the `nodes` feature on its own:
+To see how this works, let's look at the `NOX` feature on its own.
+The NOX feature gives the number of nitric oxides in parts per 10 million:
 """
 
 # ╔═╡ 0d121fa3-fbfa-44e5-904b-64a1622ec91b
@@ -168,9 +171,9 @@ Say, we take the following subset of length `0.7 * length(nodes)`:
 # ╔═╡ ee12350a-627b-4a11-99cb-38c496977d18
 md"""
 Now, the algorithm would choose a different location and, hence, introduce unstability.
-To solve this, Bénard et al. decided to limit the splitpoints to a pre-defined set of points.
+To solve this, Bénard et al. decided to limit the splitpoints that the algorithm can use to split to data to a pre-defined set of points.
 For each feature, they find `q` empirical quantiles where `q` is typically 10.
-Let's overlay these quantiles on top of the `nodes` feature:
+Let's overlay these quantiles on top of the `NOX` feature:
 """
 
 # ╔═╡ a816caed-659c-4b07-b9b2-9a820d844416
@@ -181,11 +184,14 @@ For most people, few auxillary `nodes` were detected.
 Next, let's see where the cutpoints are when we take the same random subset as above:
 """
 
-# ╔═╡ 52b61a65-a2d0-4ef9-b3e3-e0eb825ca501
+# ╔═╡ 01b08d44-4b9b-42e2-bb20-f34cb9b407f3
 md"""
 As can be seen, many cutpoints are at the same location as before.
 Furthermore, compared to the unrestricted range, the chance that two different trees who see a different random subset of the data will select the same cutpoint has increased dramatically.
+"""
 
+# ╔═╡ 6cb0ded0-8f49-498a-8fe9-7ce3ea10d945
+md"""
 The benefit of this is that it is now quite easy to extract the most important rules.
 It works by extracting the rules and simplifying them a bit.
 Next, the rules can be ordered by frequency of occurence to get the most important rules.
@@ -196,44 +202,41 @@ Let's see how accurate this model is.
 md"""
 ## Benchmark
 
-For the benchmark, lets compare the decision tree, a stabilized random forest (`StableForestClassifier`), SIRUS (`StableRulesClassifier`), and LightGBM (`LGBMClassifier`).
+For the benchmark, lets compare the following models:
+
+- Decision tree (`DecisionTreeClassifier`)
+- Stabilized random forest (`StableForestClassifier`)
+- SIRUS (`StableRulesClassifier`)
+- LightGBM (`LGBMClassifier`)
+
 The latter is a state-of-the-art gradient boosting model created by Microsoft.
 """
 
-# ╔═╡ aa560aad-9de4-4e7f-92ce-316f88439d57
-md"""
-This package implements the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) for binary classification.
-Regression and multiclass-classification are also technically possible but not yet implemented.
-The focus is on binary classification because I need that for a paper.
+# ╔═╡ 1d08ca81-a18a-4a74-992c-14243d2ea7dc
+function _score(e::PerformanceEvaluation)
+	return round(only(e.measurement); digits=2)
+end;
 
-The SIRUS algorithm was presented by Bénard et al. in 2020 and 2021.
-In short, SIRUS combines the predictive accuracy of random forests with the explainability of decision trees while remaining stable.
-Decision trees are easily interpretable but are unstable, meaning that small changes in the dataset can change the model drastically.
-Random forests have solved this by fitting multiple trees.
-However, interpretability of random forests is limited even with tools such as Shapley values.
-For example, it is not possible to reconstruct the model given only the Shapley values.
-This package solves these problems by finding a number of decision rules; typically 10.
+# ╔═╡ 4dcd564a-5b2f-4eae-87d6-c2973b828282
+_filter_rng(hyper::NamedTuple) = Base.structdiff(hyper, (; rng=:foo));
 
-Note that, compared to random forests, the accuracy of these rules are lower than the accuracy of the pure tree.
-However, in practise, it is very likely that the accuracy of the rules is higher because the model can be verified by interpreting the rules.
+# ╔═╡ 7a9a0242-a7ba-4508-82fd-a48084525afe
+_pretty_name(modeltype) = last(split(string(modeltype), '.'));
 
-## Algorithm
+# ╔═╡ 6a539bb4-f51f-4efa-af48-c43318ed2502
+_hyper2str(hyper::NamedTuple) = hyper == (;) ? "(;)" : string(hyper)::String;
 
-Decision tree-based algorithms are known to be unstable.
-In other words, the trees can change drastically for small changes in the data.
-This is caused by the process in which the trees choose their splits.
-To choose the splits, a greedy recursive binary splitting algorithm is used (James et al., [2014](https://doi.org/10.1007/978-1-0716-1418-1)).
-For example, consider the following two-dimensional case:
-"""
-
-# ╔═╡ e7861f63-aa29-419d-a458-275c8ca9bcfb
-n = 10
-
-# ╔═╡ 679abca3-9f22-4a43-a4b5-77dbea63bf08
-# X = rand(StableRNG(1), n, 2);
-
-# ╔═╡ 73666382-d78e-4096-a97b-7ed90b88d694
-# y = categorical(rand(StableRNG(1), 0:1, n));
+# ╔═╡ cece10be-736e-4ee1-8c57-89beb0608a92
+function _evaluate(modeltype, hyperparameters, X, y)
+    model = modeltype(; hyperparameters...)
+	e = evaluate(model, X, y)
+	row = (;
+	    Model=_pretty_name(modeltype),
+	    Hyperparameters=_hyper2str(_filter_rng(hyperparameters)),
+	    AUC=_score(e),
+	    se=round(only(MLJ.MLJBase._standard_errors(e)); digits=2)
+	)
+end;
 
 # ╔═╡ 83700ef9-f833-49d0-9ee9-76eb56f643e9
 # hideall
@@ -255,18 +258,25 @@ md"""
 ## Appendix
 """
 
+# ╔═╡ ede038b3-d92e-4208-b8ab-984f3ca1810e
+function _plot_cutpoints(data::AbstractVector)
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	cutpoints = Float64.(unique(ST._cutpoints(data, 10)))
+	scatter!(ax, data, fill(1, length(data)))
+	vlines!(ax, cutpoints; color=:black, linestyle=:dash)
+	textlocs = [(c, 1.1) for c in cutpoints]
+	for cutpoint in cutpoints
+		annotation = string(round(cutpoint; digits=2))::String
+		text!(ax, cutpoint + 0.003, 1.08; text=annotation, textsize=11)
+	end
+	ylims!(ax, 0.9, 1.2)
+	hideydecorations!(ax)
+	return fig
+end;
+
 # ╔═╡ 93a7dd3b-7810-4021-bf6e-ae9c04acea46
 _rng(seed::Int=1) = StableRNG(seed);
-
-# ╔═╡ ed913163-b720-4f3a-978f-a844f448c923
-if !haskey(ENV, "REGISTERED_HABERMAN")
-    name = "Haberman"
-    message = "Slightly modified copy of Haberman's Survival Data Set"
-    remote_path = "https://github.com/rikhuijzer/haberman-survival-dataset/releases/download/v1.0.0/haberman.csv"
-    checksum = "a7e9aeb249e11ac17c2b8ea4fdafd5c9392219d27cb819ffaeb8a869eb727a0f"
-    DataDeps.register(DataDep(name, message, remote_path, checksum))
-    ENV["REGISTERED_HABERMAN"] = "true"
-end;
 
 # ╔═╡ be324728-1b60-4584-b8ea-c4fe9e3466af
 function _io2text(f::Function)
@@ -277,33 +287,43 @@ function _io2text(f::Function)
 end;
 
 # ╔═╡ 7ad3cf67-2acd-44c6-aa91-7d5ae809dfbc
-function _evaluate(model, X, y; nfolds=5)
+function _evaluate(model, X, y; nfolds=10)
     resampling = CV(; nfolds, shuffle=true, rng=_rng())
     acceleration = MLJ.CPUThreads()
     evaluate(model, X, y; acceleration, verbosity=0, resampling, measure=auc)
 end;
 
 # ╔═╡ 2cb02c2a-6890-40d8-9323-c3f836a03617
-function _haberman()
-    dir = datadep"Haberman"
-    path = joinpath(dir, "haberman.csv")
-    df = CSV.read(path, DataFrame)
-    df[!, :survival] = categorical(df.survival)
-    # Need Floats for the LGBMClassifier.
-    for col in [:age, :year, :nodes]
+function _boston()
+    data = BostonHousing()
+    df = hcat(data.features, data.targets)
+    dropmissing!(df)
+    for col in names(df)
         df[!, col] = float.(df[:, col])
     end
-    return df
+    # Median value of owner-occupied homes in 1000's of dollars.
+    target = :MEDV
+    m = mean(df[:, target]) # 22.5 thousand dollars.
+    df[!, target] = categorical([value < m ? 0 : 1 for value in df[:, target]])
+	select!(df, target, :)
+	select!(df, Not(:B))
+	return df
 end;
 
 # ╔═╡ 961aa273-d97b-497f-a79a-06bf89dc34b0
-haberman = _haberman()
+boston = _boston()
 
 # ╔═╡ 6e16f844-9365-43af-9ea7-2984808f1fd5
-X = haberman[:, Not(:survival)];
+X = boston[:, Not(:MEDV)];
 
 # ╔═╡ b6957225-1889-49fb-93e2-f022ca7c3b23
-y = haberman.survival;
+y = boston.MEDV;
+
+# ╔═╡ 48110693-1aee-4af7-878d-0ae9a545657d
+length(filter(==(0), y))
+
+# ╔═╡ 4dc13f14-41cf-4589-a057-ef69aee783f8
+length(filter(==(1), y))
 
 # ╔═╡ 9e313f2c-08d9-424f-9ea4-4a4641371360
 tree_evaluations = let
@@ -311,20 +331,63 @@ tree_evaluations = let
 	_evaluate(model, X, y)
 end;
 
-# ╔═╡ 2dcd43e6-41b9-412b-b5bc-550a89376497
-# hideall
+# ╔═╡ ab103b4e-24eb-4575-8c04-ae3fd9ec1673
+e1 = let
+	model = DecisionTreeClassifier
+	hyperparameters = (; max_depth=2, rng=_rng(3))
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 6ea43d21-1cc0-4bca-8683-dce67f592949
+# ╠═╡ show_logs = false
+e2 = let
+	model = StableForestClassifier
+	hyperparameters = (; rng=_rng())
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 88a708a7-87e8-4f97-b199-70d25ba91894
+# ╠═╡ show_logs = false
+e3 = let
+	model = StableRulesClassifier
+	hyperparameters = (; max_rules=10, rng=_rng())
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
+# ╠═╡ show_logs = false
+e4 = let
+	model = StableRulesClassifier
+	hyperparameters = (; max_rules=25, rng=_rng())
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 6ca70265-ede3-4efd-86fa-e6940a45e84f
+# ╠═╡ show_logs = false
+e5 = let
+	model = LGBMClassifier
+	hyperparameters = (; max_depth=2)
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 263ea81f-5fd6-4414-a571-defb1cabab4b
+# ╠═╡ show_logs = false
+e6 = let
+	model = LGBMClassifier
+	hyperparameters = (; )
+	_evaluate(model, hyperparameters, X, y)
+end;
+
+# ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
 let
-	fig = Figure()
-	ax = Axis(fig[1, 1]; xlabel="X[:, 1]", ylabel="X[:, 2]")
-	scatter!(ax, X[:, 1], X[:, 2], markersize=14, marker=markers(y))
-	fig
+	df = DataFrame([e1, e2, e3, e4, e5, e6])
 end
 
 # ╔═╡ 39fd9deb-2a27-4c28-ae06-2a36c4c54427
 let
 	tree = tree_evaluations.fitted_params_per_fold[1].tree
 	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(haberman))
+		DecisionTree.print_tree(io, tree; feature_names=names(boston))
 	end
 end
 
@@ -332,23 +395,23 @@ end
 let
 	tree = tree_evaluations.fitted_params_per_fold[2].tree
 	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(haberman))
+		DecisionTree.print_tree(io, tree; feature_names=names(boston))
 	end
 end
 
 # ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
-nodes = sort(haberman.nodes);
+nox = sort(boston.NOX);
 
 # ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # hideall
-ln = length(nodes);
+ln = length(nox);
 
 # ╔═╡ de90efc9-2171-4406-93a1-9a213ab32259
 # hideall
 let
 	fig = Figure(; resolution=(800, 100))
 	ax = Axis(fig[1, 1])
-	scatter!(ax, nodes, fill(1, ln))
+	scatter!(ax, nox, fill(1, ln))
 	hideydecorations!(ax)
 	fig
 end
@@ -358,15 +421,15 @@ end
 let
 	fig = Figure(; resolution=(800, 100))
 	ax = Axis(fig[1, 1])
-	scatter!(ax, nodes, fill(1, ln))
-	vlines!(ax, [nodes[303]]; color=:red)
+	scatter!(ax, nox, fill(1, ln))
+	vlines!(ax, [nox[300]]; color=:red)
 	hideydecorations!(ax)
 	fig
 end
 
 # ╔═╡ bfcb5e17-8937-4448-b090-2782818c6b6c
 # hideall
-subset = collect(ST._rand_subset(_rng(), nodes, round(Int, 0.7 * ln)));
+subset = collect(ST._rand_subset(_rng(3), nox, round(Int, 0.7 * ln)));
 
 # ╔═╡ dff9eb71-a853-4186-8245-a64206379b6f
 # hideall
@@ -382,28 +445,17 @@ let
 	fig
 end
 
-# ╔═╡ 8b57cda0-7249-440d-90b2-ff4ca27e6d6c
-# hideall
-let
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	cutpoints = ST._cutpoints(subset, 10)
-	scatter!(ax, subset, fill(1, ls))
-	vlines!(ax, cutpoints; color=:black)
-	hideydecorations!(ax)
-	fig
-end
+# ╔═╡ 1471aac2-140f-4b2f-a3e6-15bca257f9f6
+_plot_cutpoints(subset)
 
-# ╔═╡ 3d68d35b-2192-4640-895d-51ce8e29a368
-# hideall
+# ╔═╡ 4935d8f5-32e1-429c-a8c1-84c242eff4bf
+_plot_cutpoints(nox)
+
+# ╔═╡ ef3605ec-93dc-4b9f-b4f1-3014b881c349
 let
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	cutpoints = ST._cutpoints(nodes, 10)
-	scatter!(ax, nodes, fill(1, ln))
-	vlines!(ax, cutpoints; color=:black)
-	hideydecorations!(ax)
-	fig
+	c1 = unique(ST._cutpoints(nox, 10))
+	c2 = (ST._cutpoints(subset, 10))
+	count(c1 .== c2)
 end
 
 # ╔═╡ Cell order:
@@ -415,6 +467,9 @@ end
 # ╠═6e16f844-9365-43af-9ea7-2984808f1fd5
 # ╠═b6957225-1889-49fb-93e2-f022ca7c3b23
 # ╠═4c8dd68d-b193-4846-8d93-ab33512c3fa2
+# ╠═48110693-1aee-4af7-878d-0ae9a545657d
+# ╠═4dc13f14-41cf-4589-a057-ef69aee783f8
+# ╠═f75aa57f-6e84-4f7e-88e4-11a00cb9ad2b
 # ╠═9e313f2c-08d9-424f-9ea4-4a4641371360
 # ╠═e5a45b1a-d761-4279-834b-216df2a1dbb5
 # ╠═39fd9deb-2a27-4c28-ae06-2a36c4c54427
@@ -433,26 +488,32 @@ end
 # ╠═dff9eb71-a853-4186-8245-a64206379b6f
 # ╠═25ad7a18-f989-40f7-8ef1-4ca506446478
 # ╠═ee12350a-627b-4a11-99cb-38c496977d18
-# ╠═3d68d35b-2192-4640-895d-51ce8e29a368
+# ╠═4935d8f5-32e1-429c-a8c1-84c242eff4bf
+# ╠═1471aac2-140f-4b2f-a3e6-15bca257f9f6
 # ╠═a816caed-659c-4b07-b9b2-9a820d844416
-# ╠═8b57cda0-7249-440d-90b2-ff4ca27e6d6c
-# ╠═52b61a65-a2d0-4ef9-b3e3-e0eb825ca501
+# ╠═01b08d44-4b9b-42e2-bb20-f34cb9b407f3
+# ╠═ef3605ec-93dc-4b9f-b4f1-3014b881c349
+# ╠═6cb0ded0-8f49-498a-8fe9-7ce3ea10d945
 # ╠═7e1d46b4-5f93-478d-9105-a5b0db1eaf08
-# ╠═aa560aad-9de4-4e7f-92ce-316f88439d57
-# ╠═148bdc38-19e8-4dfc-80d5-ffeaee28b804
-# ╠═e7861f63-aa29-419d-a458-275c8ca9bcfb
-# ╠═679abca3-9f22-4a43-a4b5-77dbea63bf08
-# ╠═5366a8f7-1465-4f0a-b9c8-096818104c24
-# ╠═73666382-d78e-4096-a97b-7ed90b88d694
+# ╠═1d08ca81-a18a-4a74-992c-14243d2ea7dc
+# ╠═4dcd564a-5b2f-4eae-87d6-c2973b828282
+# ╠═7a9a0242-a7ba-4508-82fd-a48084525afe
+# ╠═6a539bb4-f51f-4efa-af48-c43318ed2502
+# ╠═cece10be-736e-4ee1-8c57-89beb0608a92
+# ╠═ab103b4e-24eb-4575-8c04-ae3fd9ec1673
+# ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
+# ╠═88a708a7-87e8-4f97-b199-70d25ba91894
+# ╠═5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
+# ╠═6ca70265-ede3-4efd-86fa-e6940a45e84f
+# ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
+# ╠═622beb62-51ac-4b44-9409-550e5f422fe4
 # ╠═83700ef9-f833-49d0-9ee9-76eb56f643e9
-# ╠═2dcd43e6-41b9-412b-b5bc-550a89376497
-# ╠═758d8562-f88d-47bd-82aa-22caeda9c208
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
+# ╠═ede038b3-d92e-4208-b8ab-984f3ca1810e
 # ╠═f833dab6-31d4-4353-a68b-ef0501d606d4
 # ╠═93a7dd3b-7810-4021-bf6e-ae9c04acea46
-# ╠═ed913163-b720-4f3a-978f-a844f448c923
 # ╠═be324728-1b60-4584-b8ea-c4fe9e3466af
 # ╠═7ad3cf67-2acd-44c6-aa91-7d5ae809dfbc
 # ╠═2cb02c2a-6890-40d8-9323-c3f836a03617
