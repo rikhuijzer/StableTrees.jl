@@ -25,7 +25,6 @@ begin
 	using CategoricalArrays: categorical
 	using CSV: CSV
 	using DataDeps: DataDeps, DataDep, @datadep_str
-	using MLDatasets: BostonHousing, Iris
 	using DataFrames: DataFrame, Not, dropmissing!, filter!, nrow, rename!, select!
 	using LightGBM.MLJInterface: LGBMClassifier
 	using MLJDecisionTreeInterface: DecisionTree, DecisionTreeClassifier
@@ -97,10 +96,10 @@ md"""
 This shows that the features and the values for the splitpoints are not the same for both trees.
 This is called stability.
 Or in this case, a decision tree is considered to be unstable.
-This unstability is problematic in situations where real-world decisions are based on the outcome of the model.
+This instability is problematic in situations where real-world decisions are based on the outcome of the model.
 Imagine using this model for the selecting which students are allowed to enter some university.
 If the model is updated every year with the data from the last year, then the selection criteria would vary wildly per year.
-This unstability also causes accuracy to fluctuate wildly.
+This instability also causes accuracy to fluctuate wildly.
 Intuitively, this makes sense: if the model changes wildly for small data changes, then model accuracy also changes wildly.
 This intuitively also implies that the model is more likely to overfit.
 This is why random forests were introduced.
@@ -116,13 +115,13 @@ To interpret the model, individuals would need to interpret hundreds to thousand
 Alternatively, methods have been created to visualize these uninterpretable models (for example, see Molnar ([2022](https://christophm.github.io/interpretable-ml-book/)); Chapters 6, 7 and 8).
 The most promising one of these methods are Shapley values and SHAP.
 These methods show which features have the highest influence on the prediction.
-See my blogpost on [Random forests and Shapley values](https://huijzer.xyz/posts/shapley/) for more information.
+See my blog post on [Random forests and Shapley values](https://huijzer.xyz/posts/shapley/) for more information.
 Knowing which features have the highest influence is nice, but they do not state exactly what feature is used and at what cutoff.
 Again, this is not good enough for selecting students into universities.
 For example, what if the government decides to ask for details about the selection?
 The only answer that you can give is that some features are used for selection more than others and that they are on average used in a certain direction.
 If the government asks for biases in the model, then these are impossible to report.
-In practise, the decision is still a black-box.
+In practice, the decision is still a black-box.
 SIRUS solves this by extracting easily interpretable rules from the random forests.
 """
 
@@ -155,8 +154,7 @@ md"""
 
 In the papers which introduce SIRUS, Bénard et al. ([2021a](https://doi.org/10.1214/20-EJS1792), [2021b](https://proceedings.mlr.press/v130/benard21a.html)) proof that their algorithm is stable and that the other algorithms are not.
 They achieve their stability by restricting the location at which the splitpoints can be chosen.
-To see how this works, let's look at the `NOX` feature on its own.
-The NOX feature gives the number of nitric oxides in parts per 10 million:
+To see how this works, let's look at the `age` feature on its own.
 """
 
 # ╔═╡ 0d121fa3-fbfa-44e5-904b-64a1622ec91b
@@ -174,10 +172,10 @@ Say, we take the following subset of length `0.7 * length(nodes)`:
 
 # ╔═╡ ee12350a-627b-4a11-99cb-38c496977d18
 md"""
-Now, the algorithm would choose a different location and, hence, introduce unstability.
+Now, the algorithm would choose a different location and, hence, introduce instability.
 To solve this, Bénard et al. decided to limit the splitpoints that the algorithm can use to split to data to a pre-defined set of points.
 For each feature, they find `q` empirical quantiles where `q` is typically 10.
-Let's overlay these quantiles on top of the `NOX` feature:
+Let's overlay these quantiles on top of the `age` feature:
 """
 
 # ╔═╡ 0cc970cd-b7ed-4782-a520-ff0a76fe0453
@@ -219,7 +217,7 @@ We can summarize the results as follows:
 md"""
 As can be seen, the score of the stabilized random forest (`StableForestClassifier`) is almost as good as Microsoft's classifier (`LGBMClassifier`), but both are not interpretable since that requires interpreting thousands of trees.
 With the rule-based classifier (`StableRulesClassifier`), a small amount of predictive performance can be traded for high interpretability.
-Note that the rule-based classifier may actually be more accurate in practise because verifying and debugging the model is much easier.
+Note that the rule-based classifier may actually be more accurate in practice because verifying and debugging the model is much easier.
 
 Regarding the hyperparameters, tuning `max_rules` and `max_depth` has the most effect.
 `max_rules` specifies the number of rules to which the random forest is simplified.
@@ -235,10 +233,10 @@ The higher this number, the more trees are fitted and, hence, the higher the cha
 
 # ╔═╡ 16de5518-2a16-40ef-87a5-d2acd514d294
 md"""
-## Rule interpretation
+## Model interpretation
 
 Finally, let's interpret the rules that the model has learned.
-Since we know that the model performs well on the cross-validations, we can fit our prefered model on the complete dataset:
+Since we know that the model performs well on the cross-validations, we can fit our preferred model on the complete dataset:
 """
 
 # ╔═╡ 6d0b29b6-61fb-4d16-9389-071892a3d9db
@@ -248,7 +246,7 @@ The model has learned three rules for this dataset.
 For making a prediction for some value at row `i`, the model will first look at the value for the `nodes` feature.
 If that value is below 2.0, then the probability of survival is 0.819 and the probability of not surviving is 0.181.
 To see that the 0.819 means survival, see the bottom of the result which states "and 2 classes: [0.0, 1.0]" which means that any first element means that the patient didn't survive for at least 5 years and the second element means that the patient did survive.
-As a sidenote, giving a probability for each class is useful for later when the model will need to handle multi-class and regression settings.
+As a side note, giving a probability for each class is useful for later when the model will need to handle multi-class and regression settings.
 The values `[0.338, 0.622]` are used when the `nodes` value is greater or equal to 2.0.
 Similarly, the model will obtain the probabilities for rules 2 and 3.
 To obtain the final result, the model will take a weighted average over the three rules.
@@ -312,37 +310,18 @@ function _plot_cutpoints(data::AbstractVector)
 	return fig
 end;
 
-# ╔═╡ 2cb02c2a-6890-40d8-9323-c3f836a03617
-function _boston()
-    data = BostonHousing()
-    df = hcat(data.features, data.targets)
-    dropmissing!(df)
-    for col in names(df)
-        df[!, col] = float.(df[:, col])
-    end
-    # Median value of owner-occupied homes in 1000's of dollars.
-    target = :MEDV
-    m = mean(df[:, target]) # 22.5 thousand dollars.
-    df[!, target] = categorical([value < m ? 0 : 1 for value in df[:, target]])
-	select!(df, target, :)
-	return df
-end;
-
-# ╔═╡ 06993234-d238-457d-9aac-c88574faf04a
-function _iris()
-	df = Iris()
-	df = hcat(df.features, df.targets)
-	df[!, :class] = string.(df.class)
-	@show unique(df.class)
-	filter!(:class => !=("Iris-virginica"), df)
-	df[!, :class] = categorical([string(class) == "Iris-setosa" ? 0 : 1 for class in df.class])
-	@assert nrow(df) == 100
-	@assert length(filter(==(0), df.class)) == 50
-	return df
+# ╔═╡ 9db18ac7-4508-4861-8854-3e19d5218309
+function register_haberman()
+    name = "Haberman"
+    message = "Slightly modified copy of Haberman's Survival Data Set"
+    remote_path = "https://github.com/rikhuijzer/haberman-survival-dataset/releases/download/v1.0.0/haberman.csv"
+    checksum = "a7e9aeb249e11ac17c2b8ea4fdafd5c9392219d27cb819ffaeb8a869eb727a0f"
+    DataDeps.register(DataDep(name, message, remote_path, checksum))
 end;
 
 # ╔═╡ 564598d7-5bdf-4e42-b812-8aca20fa20d4
 function _haberman()
+	register_haberman()
     dir = datadep"Haberman"
     path = joinpath(dir, "haberman.csv")
     df = CSV.read(path, DataFrame)
@@ -437,16 +416,6 @@ end
 # hideall
 _plot_cutpoints(nodes)
 
-# ╔═╡ 1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
-let
-	dir = datadep"wisconsin"
-	path = joinpath(dir, "breast-cancer-wisconsin.data")
-	header = string.(1:11)
-	df = CSV.read(path, DataFrame; header)
-	@show names(df)
-	rename!(df, 1 => :radius)
-end
-
 # ╔═╡ 4dcd564a-5b2f-4eae-87d6-c2973b828282
 _filter_rng(hyper::NamedTuple) = Base.structdiff(hyper, (; rng=:foo));
 
@@ -495,12 +464,6 @@ let
 		DecisionTree.print_tree(io, tree; feature_names=names(data))
 	end
 end
-
-# ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
-foo = _evaluate(StableForestClassifier(; rng=_rng()), X, y)
-
-# ╔═╡ f593024e-411a-4cde-ac2a-1a168d0f76a1
-_score(foo)
 
 # ╔═╡ ab103b4e-24eb-4575-8c04-ae3fd9ec1673
 # ╠═╡ show_logs = false
@@ -632,12 +595,8 @@ end
 # ╠═be324728-1b60-4584-b8ea-c4fe9e3466af
 # ╠═7ad3cf67-2acd-44c6-aa91-7d5ae809dfbc
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
-# ╠═892da914-c5ec-4e56-a5e0-6cbff6cd6217
-# ╠═f593024e-411a-4cde-ac2a-1a168d0f76a1
-# ╠═2cb02c2a-6890-40d8-9323-c3f836a03617
-# ╠═06993234-d238-457d-9aac-c88574faf04a
+# ╠═9db18ac7-4508-4861-8854-3e19d5218309
 # ╠═564598d7-5bdf-4e42-b812-8aca20fa20d4
-# ╠═1715e0e5-87bf-4fa1-8e7e-0a8f11be46ce
 # ╠═4dcd564a-5b2f-4eae-87d6-c2973b828282
 # ╠═7a9a0242-a7ba-4508-82fd-a48084525afe
 # ╠═cece10be-736e-4ee1-8c57-89beb0608a92
