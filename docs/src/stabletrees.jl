@@ -42,10 +42,13 @@ TableOfContents()
 
 # ╔═╡ b1c17349-fd80-43f1-bbc2-53fdb539d1c0
 md"""
-This package implements the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) for binary classification.
-(Regression and multiclass-classification will be implemented later.)
-SIRUS is based on random forests.
-However, compared to random forests, the results are much easier to explain since the forests are converted to a set of decison rules.
+This package is a pure Julia implementation of the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) algorithm.
+This package has only implemented binary classification for now.
+Regression and multiclass-classification will be implemented later.
+For R fans, the SIRUS package is also available via [CRAN](https://cran.r-project.org/web/packages/sirus/index.html).
+
+The algorithm is based on random forests.
+However, compared to random forests, the model is much more interpretable since the forests are converted to a set of decison rules.
 This page will provide an overview of the algorithm and describe not only how it can be used but also how it works.
 To do this, let's start by briefly describing random forests.
 """
@@ -61,11 +64,9 @@ As an example, we take Haberman's Survival Data Set (see the Appendix below for 
 
 # ╔═╡ 4c8dd68d-b193-4846-8d93-ab33512c3fa2
 md"""
-This dataset contains information on [housing in Boston, MA](http://www.cs.toronto.edu/~delve/data/boston/bostonDetail.html).
-The `MEDV` column contains a `0` if the house price is below the mean of all the known values of occupied homes.
-Specifically, the column contains a `0` if the house price is below 22.5 thousand dollars and a `1` if the house price is below 22.5 thousand dollars.
-The mean house price is so low because of inflation; the dataset is from 1978.
-Anyway, as a last check, the dataset is reasonably well balanced:
+This dataset contains observations from a study with patients who had breast cancer.
+The `survival` column contains a `0` if a patient has died within 5 years and `1` if the patient has survived for at least 5 years.
+The aim is to predict survival based on the `age`, the `year` in which the operation was conducted and the number of detected auxillary `nodes`.
 """
 
 # ╔═╡ f75aa57f-6e84-4f7e-88e4-11a00cb9ad2b
@@ -216,7 +217,7 @@ We can summarize the results as follows:
 
 # ╔═╡ 4a4ab7ef-659e-4048-ab16-94ad4cb4328a
 md"""
-As can be seen, the score of the stabilized random forest (`StableForestClassifier`) is almost as good as Microsoft's classifier (`LGBMClassifier`), but both are not interpretable since it requires interpreting thousands of trees.
+As can be seen, the score of the stabilized random forest (`StableForestClassifier`) is almost as good as Microsoft's classifier (`LGBMClassifier`), but both are not interpretable since that requires interpreting thousands of trees.
 With the rule-based classifier (`StableRulesClassifier`), a small amount of predictive performance can be traded for high interpretability.
 Note that the rule-based classifier may actually be more accurate in practise because verifying and debugging the model is much easier.
 
@@ -231,10 +232,6 @@ It also simplifies the rules because with `max_depth=1`, the rule will contain o
 In some cases, model accuracy can be improved by increasing `n_trees`.
 The higher this number, the more trees are fitted and, hence, the higher the chance that the right rules are extracted from the trees.
 """
-
-# ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
-# hideall
-ST = StableTrees;
 
 # ╔═╡ 16de5518-2a16-40ef-87a5-d2acd514d294
 md"""
@@ -268,29 +265,13 @@ md"""
 
 Thanks to Clément Bénard, Gérard Biau, Sébastian da Veiga and Erwan Scornet for creating the SIRUS algorithm and documenting it extensively.
 Special thanks to Clément Bénard for answering my questions regarding the implementation.
+Also thanks to my PhD supervisors Ruud den Hartigh, Peter de Jonge and Frank Blaauw, and Age de Wit and colleagues at the Dutch Ministry of Defence for clarifying the constraints of the our data-problem and for providing the space to investigate multiple solutions.
 """
 
 # ╔═╡ e1890517-7a44-4814-999d-6af27e2a136a
 md"""
 ## Appendix
 """
-
-# ╔═╡ ede038b3-d92e-4208-b8ab-984f3ca1810e
-function _plot_cutpoints(data::AbstractVector)
-	fig = Figure(; resolution=(800, 100))
-	ax = Axis(fig[1, 1])
-	cutpoints = Float64.(unique(ST._cutpoints(data, 10)))
-	scatter!(ax, data, fill(1, length(data)))
-	vlines!(ax, cutpoints; color=:black, linestyle=:dash)
-	textlocs = [(c, 1.1) for c in cutpoints]
-	for cutpoint in cutpoints
-		annotation = string(round(cutpoint; digits=2))::String
-		text!(ax, cutpoint + 0.2, 1.08; text=annotation, textsize=13)
-	end
-	ylims!(ax, 0.9, 1.2)
-	hideydecorations!(ax)
-	return fig
-end;
 
 # ╔═╡ 93a7dd3b-7810-4021-bf6e-ae9c04acea46
 _rng(seed::Int=1) = StableRNG(seed);
@@ -308,6 +289,27 @@ function _evaluate(model, X, y; nfolds=10)
     resampling = CV(; nfolds, shuffle=true, rng=_rng())
     acceleration = MLJ.CPUThreads()
     evaluate(model, X, y; acceleration, verbosity=0, resampling, measure=auc)
+end;
+
+# ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
+# hideall
+ST = StableTrees;
+
+# ╔═╡ ede038b3-d92e-4208-b8ab-984f3ca1810e
+function _plot_cutpoints(data::AbstractVector)
+	fig = Figure(; resolution=(800, 100))
+	ax = Axis(fig[1, 1])
+	cutpoints = Float64.(unique(ST._cutpoints(data, 10)))
+	scatter!(ax, data, fill(1, length(data)))
+	vlines!(ax, cutpoints; color=:black, linestyle=:dash)
+	textlocs = [(c, 1.1) for c in cutpoints]
+	for cutpoint in cutpoints
+		annotation = string(round(cutpoint; digits=2))::String
+		text!(ax, cutpoint + 0.2, 1.08; text=annotation, textsize=13)
+	end
+	ylims!(ax, 0.9, 1.2)
+	hideydecorations!(ax)
+	return fig
 end;
 
 # ╔═╡ 2cb02c2a-6890-40d8-9323-c3f836a03617
@@ -353,19 +355,13 @@ function _haberman()
 end;
 
 # ╔═╡ 961aa273-d97b-497f-a79a-06bf89dc34b0
-boston = _haberman()
+data = _haberman()
 
 # ╔═╡ 6e16f844-9365-43af-9ea7-2984808f1fd5
-X = boston[:, Not(:survival)];
+X = data[:, Not(:survival)];
 
 # ╔═╡ b6957225-1889-49fb-93e2-f022ca7c3b23
-y = boston.survival;
-
-# ╔═╡ 48110693-1aee-4af7-878d-0ae9a545657d
-length(filter(==(0), y))
-
-# ╔═╡ 4dc13f14-41cf-4589-a057-ef69aee783f8
-length(filter(==(1), y))
+y = data.survival;
 
 # ╔═╡ c2650040-f398-4a2e-bfe0-ce139c6ca879
 # ╠═╡ show_logs = false
@@ -377,7 +373,7 @@ let
 end
 
 # ╔═╡ 172d3263-2e39-483c-9d82-8c22059e63c3
-nodes = sort(boston.age);
+nodes = sort(data.age);
 
 # ╔═╡ cf1816e5-4e8d-4e60-812f-bd6ae7011d6c
 # hideall
@@ -488,7 +484,7 @@ end;
 let
 	tree = tree_evaluations.fitted_params_per_fold[1].tree
 	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(boston))
+		DecisionTree.print_tree(io, tree; feature_names=names(data))
 	end
 end
 
@@ -496,9 +492,15 @@ end
 let
 	tree = tree_evaluations.fitted_params_per_fold[2].tree
 	_io2text() do io
-		DecisionTree.print_tree(io, tree; feature_names=names(boston))
+		DecisionTree.print_tree(io, tree; feature_names=names(data))
 	end
 end
+
+# ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
+foo = _evaluate(StableForestClassifier(; rng=_rng()), X, y)
+
+# ╔═╡ f593024e-411a-4cde-ac2a-1a168d0f76a1
+_score(foo)
 
 # ╔═╡ ab103b4e-24eb-4575-8c04-ae3fd9ec1673
 # ╠═╡ show_logs = false
@@ -556,7 +558,7 @@ end
 # ╔═╡ a42b5523-b3d6-4170-b1e3-0315ec2b67f8
 # hideall
 let
-	fig = Figure(; resolution=(900, 500))
+	fig = Figure(; resolution=(900, 450))
 	grid = fig[1, 1:2] = GridLayout()
 	
 	yticks = string.(results.Model, results.Hyperparameters)
@@ -581,12 +583,6 @@ let
 	fig
 end
 
-# ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
-foo = _evaluate(StableForestClassifier(; rng=_rng()), X, y)
-
-# ╔═╡ f593024e-411a-4cde-ac2a-1a168d0f76a1
-_score(foo)
-
 # ╔═╡ Cell order:
 # ╠═7c10c275-54d8-4f1a-947f-7861199cdf21
 # ╠═e9028115-d098-4c61-a82f-d4553fe654f8
@@ -596,8 +592,6 @@ _score(foo)
 # ╠═6e16f844-9365-43af-9ea7-2984808f1fd5
 # ╠═b6957225-1889-49fb-93e2-f022ca7c3b23
 # ╠═4c8dd68d-b193-4846-8d93-ab33512c3fa2
-# ╠═48110693-1aee-4af7-878d-0ae9a545657d
-# ╠═4dc13f14-41cf-4589-a057-ef69aee783f8
 # ╠═f75aa57f-6e84-4f7e-88e4-11a00cb9ad2b
 # ╠═9e313f2c-08d9-424f-9ea4-4a4641371360
 # ╠═e5a45b1a-d761-4279-834b-216df2a1dbb5
@@ -623,17 +617,10 @@ _score(foo)
 # ╠═8fdc24d9-1f6b-4094-9722-6b5b6c713f12
 # ╠═01b08d44-4b9b-42e2-bb20-f34cb9b407f3
 # ╠═7e1d46b4-5f93-478d-9105-a5b0db1eaf08
-# ╠═ab103b4e-24eb-4575-8c04-ae3fd9ec1673
-# ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
-# ╠═88a708a7-87e8-4f97-b199-70d25ba91894
-# ╠═86ed4d56-23e6-4b4d-9b55-7067124da27f
-# ╠═5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
-# ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═622beb62-51ac-4b44-9409-550e5f422fe4
 # ╠═39e073b9-a7ae-47d0-8867-a0d099625625
 # ╠═a42b5523-b3d6-4170-b1e3-0315ec2b67f8
 # ╠═4a4ab7ef-659e-4048-ab16-94ad4cb4328a
-# ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═16de5518-2a16-40ef-87a5-d2acd514d294
 # ╠═c2650040-f398-4a2e-bfe0-ce139c6ca879
 # ╠═6d0b29b6-61fb-4d16-9389-071892a3d9db
@@ -644,6 +631,7 @@ _score(foo)
 # ╠═93a7dd3b-7810-4021-bf6e-ae9c04acea46
 # ╠═be324728-1b60-4584-b8ea-c4fe9e3466af
 # ╠═7ad3cf67-2acd-44c6-aa91-7d5ae809dfbc
+# ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═892da914-c5ec-4e56-a5e0-6cbff6cd6217
 # ╠═f593024e-411a-4cde-ac2a-1a168d0f76a1
 # ╠═2cb02c2a-6890-40d8-9323-c3f836a03617
@@ -655,3 +643,9 @@ _score(foo)
 # ╠═cece10be-736e-4ee1-8c57-89beb0608a92
 # ╠═6a539bb4-f51f-4efa-af48-c43318ed2502
 # ╠═1d08ca81-a18a-4a74-992c-14243d2ea7dc
+# ╠═ab103b4e-24eb-4575-8c04-ae3fd9ec1673
+# ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
+# ╠═88a708a7-87e8-4f97-b199-70d25ba91894
+# ╠═86ed4d56-23e6-4b4d-9b55-7067124da27f
+# ╠═5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
+# ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
