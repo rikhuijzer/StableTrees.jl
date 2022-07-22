@@ -239,6 +239,11 @@ function _evaluate(modeltype, hyperparameters, X, y)
 	(; e, row)
 end;
 
+# ╔═╡ 39e073b9-a7ae-47d0-8867-a0d099625625
+md"""
+We can depict summarize results as follows:
+"""
+
 # ╔═╡ 0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # hideall
 ST = StableTrees;
@@ -369,12 +374,9 @@ end;
 # ╠═╡ show_logs = false
 e2 = let
 	model = StableRulesClassifier
-	hyperparameters = (; max_rules=10, rng=_rng())
+	hyperparameters = (; max_rules=5, rng=_rng())
 	_evaluate(model, hyperparameters, X, y)
 end;
-
-# ╔═╡ debbdc87-40ef-4f86-ab2a-e6aa41217cf7
-e2.e
 
 # ╔═╡ 88a708a7-87e8-4f97-b199-70d25ba91894
 # ╠═╡ show_logs = false
@@ -392,23 +394,9 @@ e4 = let
 	_evaluate(model, hyperparameters, X, y)
 end;
 
-# ╔═╡ f2257d8f-0f9c-4438-bf3b-b6330b4c9e2d
-first.([e4])
-
-# ╔═╡ 6523492b-b66c-471b-bc81-36e6b1f3d010
-e4.e.fitted_params_per_fold[1]
-
-# ╔═╡ 6ca70265-ede3-4efd-86fa-e6940a45e84f
-# ╠═╡ show_logs = false
-e5 = let
-	model = LGBMClassifier
-	hyperparameters = (; max_depth=2)
-	_evaluate(model, hyperparameters, X, y)
-end;
-
 # ╔═╡ 263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═╡ show_logs = false
-e6 = let
+e5 = let
 	model = LGBMClassifier
 	hyperparameters = (; )
 	_evaluate(model, hyperparameters, X, y)
@@ -416,8 +404,25 @@ end;
 
 # ╔═╡ 622beb62-51ac-4b44-9409-550e5f422fe4
 results = let
-	df = DataFrame(getproperty.([e1, e2, e3, e4, e5, e6], :row))
+	df = DataFrame(getproperty.([e1, e2, e3, e4, e5], :row))
 	rename!(df, :se => "1.96*SE")
+end
+
+# ╔═╡ a42b5523-b3d6-4170-b1e3-0315ec2b67f8
+# hideall
+let
+	fig = Figure(; resolution=(900, 600))
+	yticks = string.(results.Model, results.Hyperparameters)
+	lr = nrow(results)
+	ax = Axis(fig[1, 1]; yticks=(1:lr, yticks), title="Area under the ROC curve")
+	locs = 1:lr
+	for (i, row) in enumerate(eachrow(results))
+		lower = row.AUC - row["1.96*SE"]
+		upper = row.AUC + row["1.96*SE"]
+		lines!(ax, [lower, upper], [i, i]; color=:black)
+		scatter!(ax, [row.AUC], [i]; color=:black)
+	end
+	fig
 end
 
 # ╔═╡ 892da914-c5ec-4e56-a5e0-6cbff6cd6217
@@ -558,12 +563,10 @@ end
 # ╠═6ea43d21-1cc0-4bca-8683-dce67f592949
 # ╠═88a708a7-87e8-4f97-b199-70d25ba91894
 # ╠═5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
-# ╠═6ca70265-ede3-4efd-86fa-e6940a45e84f
 # ╠═263ea81f-5fd6-4414-a571-defb1cabab4b
 # ╠═622beb62-51ac-4b44-9409-550e5f422fe4
-# ╠═debbdc87-40ef-4f86-ab2a-e6aa41217cf7
-# ╠═f2257d8f-0f9c-4438-bf3b-b6330b4c9e2d
-# ╠═6523492b-b66c-471b-bc81-36e6b1f3d010
+# ╠═39e073b9-a7ae-47d0-8867-a0d099625625
+# ╠═a42b5523-b3d6-4170-b1e3-0315ec2b67f8
 # ╠═0ca8bb9a-aac1-41a7-b43d-314a4029c205
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
