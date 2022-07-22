@@ -411,17 +411,28 @@ end
 # ╔═╡ a42b5523-b3d6-4170-b1e3-0315ec2b67f8
 # hideall
 let
-	fig = Figure(; resolution=(900, 600))
+	fig = Figure(; resolution=(900, 500))
+	grid = fig[1, 1:2] = GridLayout()
+	
 	yticks = string.(results.Model, results.Hyperparameters)
 	lr = nrow(results)
-	ax = Axis(fig[1, 1]; yticks=(1:lr, yticks), title="Area under the ROC curve")
-	locs = 1:lr
-	for (i, row) in enumerate(eachrow(results))
+	ax1 = Axis(grid[1, 1:6]; yticks=(1:lr, yticks), subtitle="Area under the ROC curve ")
+	ax2 = Axis(grid[1, 7]; subtitle="Interpretability")
+	interpretabilities = reverse(["low", "high", "high", "high", "high"])
+	for i in 1:lr
+		row = results[i, :]
 		lower = row.AUC - row["1.96*SE"]
 		upper = row.AUC + row["1.96*SE"]
-		lines!(ax, [lower, upper], [i, i]; color=:black)
-		scatter!(ax, [row.AUC], [i]; color=:black)
+		lines!(ax1, [lower, upper], [i, i]; color=:black)
+		scatter!(ax1, [row.AUC], [i]; color=:black)
+		align = (:left, :center)
+		text!(ax2, interpretabilities[i]; position=(0, i), offset=(-15, 1), align)
 	end
+	colgap!(grid, 20)
+	hideydecorations!(ax1; ticklabels=false)
+	hidexdecorations!(ax2)
+	hideydecorations!(ax2)
+	hidespines!(ax2)
 	fig
 end
 
