@@ -31,7 +31,7 @@ begin
 	using MLJ: CV, MLJ, Not, PerformanceEvaluation, auc, fit!, evaluate, machine
 	using PlutoUI: TableOfContents # hide
 	using StableRNGs: StableRNG
-	using StableTrees: StableTrees, StableForestClassifier, StableRulesClassifier
+	using StableTrees: StableTrees, StableRules, StableForestClassifier, StableRulesClassifier
 	using Statistics: mean
 end
 
@@ -233,7 +233,7 @@ The higher this number, the more trees are fitted and, hence, the higher the cha
 
 # ╔═╡ 16de5518-2a16-40ef-87a5-d2acd514d294
 md"""
-## Model interpretation
+## Interpretation
 
 Finally, let's interpret the rules that the model has learned.
 Since we know that the model performs well on the cross-validations, we can fit our preferred model on the complete dataset:
@@ -256,6 +256,89 @@ A patient is more likely to survive if the `age` of the patient and the number o
 Why patients operated before the `year` 1960 are more likely to survive is unclear to me.
 This could be an indication that the model is wrong or that there is something unexpected going on.
 """
+
+# ╔═╡ 3c415a26-803e-4f35-866f-2e582c6c1c45
+md"""
+## Visualization
+
+
+"""
+
+# ╔═╡ ebf34b9e-62bb-4164-a970-f06279ea4937
+# hideall
+function _weight(model::StableRules, feature_name::String)
+	for (i, rule) in enumerate(model.rules)
+		if only(rule.path.splits).splitpoint.feature_name == feature_name
+			return model.weights[i]
+		end
+	end
+end;
+
+# ╔═╡ 487e7f5f-75a5-402b-b284-3ebeeca1b56d
+# hideall
+function _threshold(model::StableRules, feature_name::String)
+	for (i, rule) in enumerate(model.rules)
+		sp = only(rule.path.splits).splitpoint
+		if sp.feature_name == feature_name
+			return sp.value
+		end
+	end
+end;
+
+# ╔═╡ 4a0a8be4-c200-4e11-ad44-37af2e170f55
+# hideall
+function _then(model::StableRules, feature_name::String)
+	for (i, rule) in enumerate(model.rules)
+		if only(rule.path.splits).splitpoint.feature_name == feature_name
+			return rule.then_probs[2]
+		end
+	end
+end;
+
+# ╔═╡ a48221a9-f7c6-4ef3-9fde-5fafbe127c0d
+# hideall
+function _else(model::StableRules, feature_name::String)
+	for (i, rule) in enumerate(model.rules)
+		if only(rule.path.splits).splitpoint.feature_name == feature_name
+			return rule.else_probs[2]
+		end
+	end
+end;
+
+# ╔═╡ 0abd8010-43a4-4aad-aa25-bd2b958988e6
+function _rule_plot(e::PerformanceEvaluation)
+	fig = Figure(; resolution=(1000, 600))
+	
+	fitresults = getproperty.(e.fitted_params_per_fold, :fitresult)
+	feature_names = String[]
+	for fitresult in fitresults
+		for rule in fitresult.rules
+			name = only(rule.path.splits).splitpoint.feature_name
+			push!(feature_names, name)
+		end
+	end
+
+	for (i, feature_name) in enumerate(unique(feature_names))
+		ax = if i == 1
+			Axis(fig[i, 1]; title="Single-clause rule plot")
+		else
+			Axis(fig[i, 1])
+		end
+		T = _threshold.(fitresults, feature_name)
+		then_probs = _then.(fitresults, feature_name)
+		else_probs = _else.(fitresults, feature_name)
+		W = _weight.(fitresults, feature_name)
+		l = length(W)
+		grp = 1:l
+		kwargs = (;
+			stack=grp,
+			strokecolor = :black,
+			strokewidth = 1,
+		)
+		scatter!(T, W .* then_probs; marker=:ltriangle, markersize=12)
+	end
+	fig
+end;
 
 # ╔═╡ 0e0252e7-87a8-49e4-9a48-5612e0ded41b
 md"""
@@ -496,6 +579,32 @@ e4 = let
 	_evaluate(model, hyperparameters, X, y)
 end;
 
+# ╔═╡ 7fad8dd5-c0a9-4c45-9663-d40a464bca77
+# hideall
+fitresults = getproperty.(e4.e.fitted_params_per_fold, :fitresult)
+
+# ╔═╡ 0ee41f3a-8348-4875-82a4-07b7121a589a
+fitresult = first(fitresults)
+
+# ╔═╡ 76ac8397-383e-4f03-8ecd-1f959fc0ef19
+# hideall
+fitresult |> typeof |> fieldnames
+
+# ╔═╡ 10c772e7-28c9-4a0c-aaa4-0e02bcd1ee9d
+@assert _weight(fitresult, "age") == 0.276
+
+# ╔═╡ d98d9162-f72a-4212-ae47-1428ca45a4de
+@assert _threshold(fitresult, "age") == 42.0f0
+
+# ╔═╡ ad5f6878-f250-4102-a1eb-79b08706e14d
+@assert _then(fitresult, "age") == 0.858
+
+# ╔═╡ b5fe57d6-126c-4092-90be-5fb2bc0d3835
+@assert _else(fitresult, "age") == 0.744
+
+# ╔═╡ e3173bf3-79f3-47d2-9dd3-164346022793
+_rule_plot(e4.e)
+
 # ╔═╡ 5d875f9d-a0aa-47b0-8a75-75bb280fa1ba
 # ╠═╡ show_logs = false
 e5 = let
@@ -587,6 +696,20 @@ end
 # ╠═16de5518-2a16-40ef-87a5-d2acd514d294
 # ╠═c2650040-f398-4a2e-bfe0-ce139c6ca879
 # ╠═6d0b29b6-61fb-4d16-9389-071892a3d9db
+# ╠═3c415a26-803e-4f35-866f-2e582c6c1c45
+# ╠═7fad8dd5-c0a9-4c45-9663-d40a464bca77
+# ╠═0ee41f3a-8348-4875-82a4-07b7121a589a
+# ╠═76ac8397-383e-4f03-8ecd-1f959fc0ef19
+# ╠═ebf34b9e-62bb-4164-a970-f06279ea4937
+# ╠═10c772e7-28c9-4a0c-aaa4-0e02bcd1ee9d
+# ╠═487e7f5f-75a5-402b-b284-3ebeeca1b56d
+# ╠═d98d9162-f72a-4212-ae47-1428ca45a4de
+# ╠═4a0a8be4-c200-4e11-ad44-37af2e170f55
+# ╠═ad5f6878-f250-4102-a1eb-79b08706e14d
+# ╠═a48221a9-f7c6-4ef3-9fde-5fafbe127c0d
+# ╠═b5fe57d6-126c-4092-90be-5fb2bc0d3835
+# ╠═0abd8010-43a4-4aad-aa25-bd2b958988e6
+# ╠═e3173bf3-79f3-47d2-9dd3-164346022793
 # ╠═0e0252e7-87a8-49e4-9a48-5612e0ded41b
 # ╠═e1890517-7a44-4814-999d-6af27e2a136a
 # ╠═ede038b3-d92e-4208-b8ab-984f3ca1810e
