@@ -381,7 +381,20 @@ end
 
 "Return only the last result for the binary case because the other is 1 -p anyway."
 function _simplify_binary_probabilities(probs::AbstractVector)
-    return length(probs) == 2 ? last(probs) : probs
+    if length(probs) == 2
+        left = first(probs)
+        right = last(probs)
+        if !isapprox(left + right, 1.0; atol=0.01)
+            @warn """
+                The sum of the two probabilities $probs doesn't add to 1.
+                This is unexpected.
+                Please open an issue at StableTrees.jl.
+                """
+        end
+        return right
+    else
+        return probs
+    end
 end
 
 "Return a pretty formatted so that it is easy to understand."
@@ -405,9 +418,9 @@ function Base.show(io::IO, model::StableRules)
     C = model.classes
     lc = length(C)
     note = lc == 2 ?
-    "\n Note: showing only probabilities for class $(last(C)) since class $(first(C)) has probability 1 - p." :
+    "\nNote: showing only the probability for class $(last(C)) since class $(first(C)) has probability 1 - p." :
         ""
-    println(io, " and $lc classes: $C. $note")
+    println(io, "and $lc classes: $C. $note")
 end
 
 function _predict(pair::Tuple{Rule,Float64}, row::AbstractVector)

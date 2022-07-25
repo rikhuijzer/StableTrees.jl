@@ -76,10 +76,10 @@ let
     @test model.classes == [1]
     @test model.weights == ST._regularize_weights([2/3, 1/3])
 
-    @test !(contains(repr(model), "showing only probabilities for class"))
+    @test !(contains(repr(model), "showing only"))
 end
 
-@testset "pretty binary result"
+@testset "binary show" begin
     r = ST.Rule(ST.TreePath(" X[i, 1] < 5 "), [0.1, 0.9], [0.2, 0.8])
     classes = [0, 1]
     weights = [1.0]
@@ -87,7 +87,7 @@ end
     pretty = repr(model)
     @test contains(pretty, "0.9")
     @test contains(pretty, "0.8")
-    @test contains(pretty, "showing only probabilities for")
+    @test contains(pretty, "showing only")
 end
 
 function generate_rules()
