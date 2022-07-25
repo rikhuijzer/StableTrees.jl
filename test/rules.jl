@@ -88,6 +88,7 @@ end
     @test contains(pretty, "0.9")
     @test contains(pretty, "0.8")
     @test contains(pretty, "showing only")
+    @test !contains(pretty, "unexpected")
 end
 
 function generate_rules()
