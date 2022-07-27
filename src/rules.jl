@@ -138,6 +138,7 @@ function _reverse(rule::Rule)
     path = TreePath([_reverse(split)])
     return Rule(path, rule.else_probs, rule.then_probs)
 end
+
 function _left_rule(rule::Rule)
     splits = _splits(rule)
     @assert length(splits) == 1
