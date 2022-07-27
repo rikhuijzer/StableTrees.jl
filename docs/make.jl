@@ -37,6 +37,9 @@ if get(ENV, "BUILD_DOCS_NOTEBOOKS", "true") == "true"
     end
 end
 
+@show readdir(pwd())
+@show readdir(joinpath(pwd(), "docs", "src"))
+
 pages = [
     "StableTrees" => "index.md",
     "API" => "api.md"
