@@ -21,6 +21,8 @@ jobs:
         run: |
           using Pkg: Pkg
           Pkg.activate("docs")
+          @info "Pkg.develop(; path=\"$(pwd())\")"
+          Pkg.develop(; path=pwd())
           Pkg.instantiate()
       - name: Build docs and deploy to the docs branch
         shell: julia --color=yes {0}
