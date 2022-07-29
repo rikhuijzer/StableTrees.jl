@@ -97,8 +97,7 @@ function _cutpoints(X, q::Int)
 end
 
 "Return a view on all `y` for which the `comparison` holds in `X[:, feature]`."
-function _view_y(X, y, feature::Int, comparison, cutpoint)
-    data = view(X, :, feature)
+function _view_y(data, y, feature::Int, comparison, cutpoint)
     indexes_in_region = Bool[comparison(e, cutpoint) for e in data]
     return view(y, indexes_in_region)
 end
@@ -160,10 +159,11 @@ function _split(
     mc = max_split_candidates
     possible_features = mc == p ? (1:p) : _rand_subset(rng, 1:p, mc)
     for feature in possible_features
+        data = view(X, :, feature)
         for cutpoint in cutpoints[feature]
-            y_left = _view_y(X, y, feature, <, cutpoint)
+            y_left = _view_y(data, y, feature, <, cutpoint)
             length(y_left) == 0 && continue
-            y_right = _view_y(X, y, feature, ≥, cutpoint)
+            y_right = _view_y(data, y, feature, ≥, cutpoint)
             length(y_right) == 0 && continue
             gain = _information_gain(y, y_left, y_right, classes)
             if best_score ≤ gain
