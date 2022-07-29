@@ -97,21 +97,14 @@ function _cutpoints(X, q::Int)
 end
 
 """
-Return a view on all `y` for which the `comparison` holds in `X[:, feature]`.
+Return a view on all `y` for which the `comparison` holds in `data`.
 `indexes_in_region` is re-used between calls.
 """
-function _view_y!(
-        indexes_in_region,
-        data,
-        y,
-        feature::Int,
-        comparison,
-        cutpoint
-    )
-    for i in eachindex(indexes_in_region)
-        indexes_in_region[i] = comparison(data[i], cutpoint)
+function _view_y!(mask, data, y, comparison, cutpoint)
+    for i in eachindex(data)
+        mask[i] = comparison(data[i], cutpoint)
     end
-    return view(y, indexes_in_region)
+    return view(y, mask)
 end
 
 """
@@ -170,13 +163,13 @@ function _split(
     p = _p(X)
     mc = max_split_candidates
     possible_features = mc == p ? (1:p) : _rand_subset(rng, 1:p, mc)
-    indexes = Vector{Bool}(undef, length(y))
+    mask = Vector{Bool}(undef, length(y))
     for feature in possible_features
         data = view(X, :, feature)
         for cutpoint in cutpoints[feature]
-            y_left = _view_y!(indexes, data, y, feature, <, cutpoint)
+            y_left = _view_y!(mask, data, y, <, cutpoint)
             isempty(y_left) && continue
-            y_right = _view_y!(indexes, data, y, feature, ≥, cutpoint)
+            y_right = _view_y!(mask, data, y, ≥, cutpoint)
             isempty(y_right) && continue
             gain = _information_gain(y, y_left, y_right, classes)
             if best_score ≤ gain
