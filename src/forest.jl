@@ -218,9 +218,10 @@ nodevalue(node::Node) = node.splitpoint
 Return a view on all rows in `X` and `y` for which the `comparison` holds in `X[:, feature]`.
 """
 function _view_X_y(X, y, splitpoint::SplitPoint, comparison)
-    indexes_in_region = comparison.(X[:, splitpoint.feature], splitpoint.value)
-    X_view = view(X, indexes_in_region, :)
-    y_view = view(y, indexes_in_region)
+    data = view(X, :, splitpoint.feature)
+    mask = comparison.(data, splitpoint.value)
+    X_view = view(X, mask, :)
+    y_view = view(y, mask)
     return (X_view, y_view)
 end
 
