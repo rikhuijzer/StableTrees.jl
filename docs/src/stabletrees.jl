@@ -42,9 +42,10 @@ TableOfContents()
 # ╔═╡ b1c17349-fd80-43f1-bbc2-53fdb539d1c0
 md"""
 This package is a pure Julia implementation of the **S**table and **I**nterpretable **RU**le **S**ets (SIRUS) algorithm.
+The algorithm was originally created by Clément Bénard, Gérard Biau, Sébastien Da Veiga, and Erwan Scornet.
 This package has only implemented binary classification for now.
 Regression and multiclass-classification will be implemented later.
-For R users, the SIRUS package is also available via [CRAN](https://cran.r-project.org/web/packages/sirus/index.html).
+For R users, the original version of the SIRUS algorithm is available via [CRAN](https://cran.r-project.org/web/packages/sirus/index.html).
 
 The algorithm is based on random forests.
 However, compared to random forests, the model is much more interpretable since the forests are converted to a set of decison rules.
@@ -108,7 +109,7 @@ The individual trees are obtained by restricting the observations and the featur
 For the restriction on the observations, the trees are only allowed to see `partial_sampling * n` observations.
 In practise, `partial_sampling` is often 0.7.
 The restriction on the features is defined in such a way that it guarantees that not every tree will take the same split at the root of the tree.
-This makes the trees less correlated (James et al., [2021](https://doi.org/10.1007/978-1-0716-1418-1; Section 8.2.2)) and, hence, very accurate.
+This makes the trees less correlated (James et al., [2021](https://doi.org/10.1007/978-1-0716-1418-1); Section 8.2.2) and, hence, more accurate.
 
 Unfortunately, these random forests are hard to interpret.
 To interpret the model, individuals would need to interpret hundreds to thousands of trees containing multiple levels.
