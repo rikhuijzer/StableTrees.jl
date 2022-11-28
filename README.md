@@ -1,3 +1,10 @@
+<br>
+<br>
+<h1 align="center">THIS PACKAGE IS DEPRECATED. USE <a href="https://github.com/rikhuijzer/SIRUS.jl">SIRUS.JL</a> INSTEAD.</h1>
+<br>
+<br>
+<br>
+
 ![image](https://user-images.githubusercontent.com/20724914/180612121-396eaa1e-261b-4c08-9131-7eb50c62acd9.png)
 
 <h1 align="center">StableTrees.jl</h1>
